@@ -53,6 +53,9 @@ OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 KIMI_API_KEY=
 
+# Voice transcription:
+GROQ_API_KEY=
+
 # Tool providers:
 EXA_API_KEY=
 ```
@@ -113,6 +116,16 @@ Approval options:
 2. Yes, and accept all execution for this session.
 3. No, and tell AutoRouter what to do instead.
 
+### Voice Input
+
+Use `/voice` to choose a dictation mode. Voice input uses Groq's `whisper-large-v3-turbo` with `GROQ_API_KEY` and inserts editable text into the prompt. It never submits the prompt automatically.
+
+1. Off disables microphone input and is the default on every launch.
+2. Press Tab and talk starts one recording when Tab is pressed. Two seconds of silence ends and transcribes it.
+3. Speak freely listens while the main prompt editor is open, detects utterances, and appends each transcription in order.
+
+Press Escape to cancel an active Tab recording. Audio is held in memory while it is recorded and is sent to Groq for transcription. AutoRouter does not save recordings to disk.
+
 ### Web Search
 
 Exa is used for current information such as recent events, weather, prices, schedules, or other live data. Search results are treated as tool context and then refined by an execution model before the final answer is shown.
@@ -133,10 +146,12 @@ After execution, AutoRouter shows planning cost, stage cost, final synthesis cos
 
 1. Type `auto` to launch.
 2. Type `/` to see matching slash commands.
-3. Use `Shift+Enter` for multiline prompts.
-4. Use arrow keys to browse prompt history.
-5. Use `Ctrl+C` to clear the input when text is present.
-6. Use `/exit` or `/quit` to close the app.
+3. Type `/voice` to choose a voice input mode.
+4. In Press Tab and talk mode, press Tab to begin dictation.
+5. Use `Shift+Enter` for multiline prompts.
+6. Use arrow keys to browse prompt history.
+7. Use `Ctrl+C` to clear the input when text is present.
+8. Use `/exit` or `/quit` to close the app.
 
 ## How Routing Works
 
@@ -201,6 +216,9 @@ AutoRouter/
 
   src/providers/
     Chat completion adapter and enabled model inventory helpers.
+
+  src/voice/
+    Microphone capture, speech detection, WAV encoding, and transcription.
 
   src/router/
     Base model response normalization and validation.

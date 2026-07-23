@@ -26,13 +26,14 @@
   },
   "scripts": {
     "start": "node ./bin/auto",
-    "check": "node --check ./bin/auto && node --check ./src/app.js && node --check ./src/config.js && node --check ./src/constants.js && node --check ./src/costs.js && node --check ./src/execution.js && node --check ./src/providers/chat.js && node --check ./src/providers/inventory.js && node --check ./src/router/analysis.js && node --check ./src/tools/exa.js && node --check ./src/tools/local-files.js && node --check ./src/utils/runtime.js && node --check ./src/utils/text.js && node --test",
+    "check": "node --check ./bin/auto && node --check ./src/app.js && node --check ./src/config.js && node --check ./src/constants.js && node --check ./src/costs.js && node --check ./src/execution.js && node --check ./src/providers/chat.js && node --check ./src/providers/inventory.js && node --check ./src/router/analysis.js && node --check ./src/tools/exa.js && node --check ./src/tools/local-files.js && node --check ./src/utils/runtime.js && node --check ./src/utils/text.js && node --check ./src/voice/audio.js && node --check ./src/voice/queue.js && node --check ./src/voice/recorder.js && node --check ./src/voice/transcription.js && node --test",
     "test": "node --test"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@picovoice/pvrecorder-node": "^1.2.9",
     "ink": "^7.0.6",
     "react": "^19.2.7"
   }

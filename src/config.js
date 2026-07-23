@@ -64,6 +64,12 @@ export const defaultConfig = {
       }
     }
   },
+  voice: {
+    provider: "groq",
+    apiKeyEnv: "GROQ_API_KEY",
+    apiBaseUrl: "https://api.groq.com/openai/v1",
+    model: "whisper-large-v3-turbo"
+  },
   providers: {
     openai: {
       enabled: true,

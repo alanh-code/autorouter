@@ -33,11 +33,11 @@ import {
   wrapPlainText
 } from "./utils/text.js";
 import {getRuntimeContext} from "./utils/runtime.js";
+import {VoiceCapture} from "./voice/recorder.js";
+import {OrderedAsyncQueue} from "./voice/queue.js";
+import {getVoiceAvailabilityError, transcribePcm} from "./voice/transcription.js";
 
 const h = React.createElement;
-const inputBg = "#e7edf3";
-const inputFg = "#1f2937";
-const cursorBg = "#00a7c8";
 const promptGutterWidth = 2;
 const inputVerticalPadding = 1;
 const modelColor = "#007c91";
@@ -45,7 +45,18 @@ const pathColor = "#6d5dfc";
 const successColor = "#00a676";
 const errorColor = "#ff3864";
 const costColor = "#b23aee";
+const voiceModes = [
+  {id: "off", label: "Off", description: "Disable microphone input"},
+  {id: "key", label: "Press Tab and talk", description: "Tab starts one utterance"},
+  {id: "free", label: "Speak freely", description: "Continuously detect utterances"}
+];
 const slashCommands = [
+  {
+    id: "voice",
+    name: "voice",
+    displayText: "/voice",
+    description: "Choose voice input mode"
+  },
   {
     id: "model",
     name: "model",
@@ -97,11 +108,12 @@ function AutoRouterApp({config}) {
       type: "text",
       lines: [
         "AutoRouter",
-        "Type /model to choose a base model, /help for commands, or enter a task."
+        "Type /model to choose a base model, /voice for dictation, /help for commands, or enter a task."
       ]
     }
   ]);
   const [mode, setMode] = useState("chat");
+  const [voiceMode, setVoiceMode] = useState("off");
   const [autoApproveExecution, setAutoApproveExecution] = useState(false);
   const [pendingExecution, setPendingExecution] = useState(null);
   const [pendingClarification, setPendingClarification] = useState(null);
@@ -143,8 +155,10 @@ function AutoRouterApp({config}) {
             "Commands",
             "1. /model           Open model picker",
             "2. /model <number>  Choose model by number",
-            "3. /help            Show commands",
-            "4. /exit            Close AutoRouter",
+            "3. /voice           Choose voice input mode",
+            "4. /voice <number>  Choose voice mode by number",
+            "5. /help            Show commands",
+            "6. /exit            Close AutoRouter",
             "",
             "Use Shift+Enter or a trailing backslash before Enter for a new line."
           ]
@@ -166,6 +180,25 @@ function AutoRouterApp({config}) {
         {type: "user", text},
         {type: "text", lines: [nextModel ? `Base model: ${nextModel.label}` : "No available base model. Add a provider API key in .env.local."]}
       ]);
+      return;
+    }
+
+    if (text === "/voice") {
+      appendEntry({type: "user", text});
+      setMode("voice");
+      return;
+    }
+
+    if (text.startsWith("/voice ")) {
+      const nextVoiceMode = chooseVoiceModeByInput(text.slice(7).trim());
+      appendEntry({type: "user", text});
+
+      if (!nextVoiceMode) {
+        appendEntry({type: "text", lines: ["Unknown voice mode. Use /voice to choose Off, Press Tab and talk, or Speak freely."]});
+        return;
+      }
+
+      selectVoiceMode(nextVoiceMode);
       return;
     }
 
@@ -269,6 +302,23 @@ function AutoRouterApp({config}) {
     setMode("chat");
   };
 
+  const selectVoiceMode = (nextVoiceMode) => {
+    if (nextVoiceMode !== "off") {
+      const availabilityError = getVoiceAvailabilityError(config);
+
+      if (availabilityError) {
+        setVoiceMode("off");
+        appendEntry({type: "text", lines: [availabilityError]});
+        setMode("chat");
+        return;
+      }
+    }
+
+    setVoiceMode(nextVoiceMode);
+    appendEntry({type: "text", lines: [`Voice input: ${getVoiceModeLabel(nextVoiceMode)}`]});
+    setMode("chat");
+  };
+
   return h(
     Box,
     {flexDirection: "column"},
@@ -284,6 +334,12 @@ function AutoRouterApp({config}) {
             setMode("chat");
           }
         })
+      : mode === "voice"
+        ? h(VoicePicker, {
+            currentMode: voiceMode,
+            onCancel: () => setMode("chat"),
+            onSelect: selectVoiceMode
+          })
       : mode === "routing"
         ? h(WorkingStatus, {label: "Routing", detail: selectedBaseModel?.label ?? "base model"})
       : mode === "approval"
@@ -311,7 +367,9 @@ function AutoRouterApp({config}) {
               }
             })
       : h(PromptEditor, {
+          config,
           selectedBaseModel,
+          voiceMode,
           promptHistory,
           onSubmit: handleSubmit,
           onExit: exit
@@ -417,7 +475,7 @@ function isCostReviewLine(line) {
 function UserPromptEntry({entry}) {
   const {stdout} = useStdout();
   const terminalWidth = Math.max(20, stdout.columns ?? 80);
-  const inputWidth = Math.max(20, terminalWidth - promptGutterWidth);
+  const inputWidth = getSafeInputWidth(terminalWidth, promptGutterWidth);
 
   return h(
     Box,
@@ -678,7 +736,8 @@ function ExecutionApproval({pendingExecution, onApprove, onApproveSession, onRej
 
 function ExecutionFeedbackEditor({onSubmit, onCancel}) {
   const {stdout} = useStdout();
-  const width = Math.max(20, stdout.columns ?? 80);
+  const terminalWidth = Math.max(20, stdout.columns ?? 80);
+  const width = getSafeInputWidth(terminalWidth);
   const [editor, setEditorState] = useState({value: "", cursorOffset: 0});
   const editorRef = useRef(editor);
 
@@ -763,10 +822,10 @@ function ExecutionFeedbackEditor({onSubmit, onCancel}) {
   );
 }
 
-function PromptEditor({selectedBaseModel, promptHistory, onSubmit, onExit}) {
+function PromptEditor({config, selectedBaseModel, voiceMode, promptHistory, onSubmit, onExit}) {
   const {stdout} = useStdout();
   const terminalWidth = Math.max(20, stdout.columns ?? 80);
-  const inputWidth = Math.max(20, terminalWidth - promptGutterWidth);
+  const inputWidth = getSafeInputWidth(terminalWidth, promptGutterWidth);
   const [editor, setEditorState] = useState({value: "", cursorOffset: 0});
   const [selectedSuggestion, setSelectedSuggestionState] = useState(0);
   const editorRef = useRef(editor);
@@ -775,6 +834,16 @@ function PromptEditor({selectedBaseModel, promptHistory, onSubmit, onExit}) {
   const historyDraftRef = useRef(null);
   const selectedSuggestionRef = useRef(0);
   const previousSuggestionsKey = useRef("");
+  const voiceCaptureRef = useRef(null);
+  const voiceGenerationRef = useRef(0);
+  const insertTranscriptionRef = useRef(() => {});
+  const transcriptionQueueRef = useRef(new OrderedAsyncQueue());
+  const transcriptionControllersRef = useRef(new Set());
+  const pendingTranscriptionsRef = useRef(0);
+  const captureStatusRef = useRef(voiceMode === "key" ? "ready" : voiceMode === "free" ? "listening" : "off");
+  const voiceErrorRef = useRef(null);
+  const mountedRef = useRef(true);
+  const [voiceActivity, setVoiceActivity] = useState(() => getVoiceActivityLabel(voiceMode, captureStatusRef.current, 0));
   const suggestions = getCommandSuggestionsForInput(editor.value, editor.cursorOffset);
   const suggestionsKey = suggestions.map((suggestion) => suggestion.id).join("|");
   promptHistoryRef.current = promptHistory;
@@ -821,9 +890,47 @@ function PromptEditor({selectedBaseModel, promptHistory, onSubmit, onExit}) {
     };
   }, [onExit]);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    const generation = voiceGenerationRef.current + 1;
+    voiceGenerationRef.current = generation;
+    voiceErrorRef.current = null;
+    transcriptionQueueRef.current = new OrderedAsyncQueue();
+    captureStatusRef.current = voiceMode === "key" ? "ready" : voiceMode === "free" ? "listening" : "off";
+    refreshVoiceActivity();
+
+    if (voiceMode === "free") {
+      startVoiceCapture(true, generation);
+    }
+
+    return () => {
+      mountedRef.current = false;
+      voiceGenerationRef.current += 1;
+      voiceCaptureRef.current?.stop();
+      voiceCaptureRef.current = null;
+
+      for (const controller of transcriptionControllersRef.current) {
+        controller.abort();
+      }
+
+      transcriptionControllersRef.current.clear();
+      pendingTranscriptionsRef.current = 0;
+      transcriptionQueueRef.current.close();
+    };
+  }, [voiceMode]);
+
   useInput((input, key) => {
     const {value, cursorOffset} = editorRef.current;
     const activeSuggestions = getCurrentCommandSuggestions();
+
+    if (key.escape && voiceMode === "key" && voiceCaptureRef.current?.isRunning) {
+      voiceCaptureRef.current.stop();
+      voiceCaptureRef.current = null;
+      captureStatusRef.current = "ready";
+      voiceErrorRef.current = null;
+      refreshVoiceActivity();
+      return;
+    }
 
     if ((key.ctrl && input === "c") || input === "\u0003") {
       if (editorRef.current.value.length > 0) {
@@ -862,8 +969,11 @@ function PromptEditor({selectedBaseModel, promptHistory, onSubmit, onExit}) {
       return;
     }
 
-    if ((key.tab || input === "\t") && activeSuggestions.length > 0) {
-      applySelectedCommandSuggestion(false);
+    if (key.tab || input === "\t") {
+      if (voiceMode === "key" && !voiceCaptureRef.current?.isRunning && pendingTranscriptionsRef.current === 0) {
+        startVoiceCapture(false, voiceGenerationRef.current);
+      }
+
       return;
     }
 
@@ -965,6 +1075,115 @@ function PromptEditor({selectedBaseModel, promptHistory, onSubmit, onExit}) {
     };
     setEditor(nextEditor);
     return nextEditor;
+  }
+
+  insertTranscriptionRef.current = (text) => {
+    const {value, cursorOffset} = editorRef.current;
+    const nextEditor = insertDictationText(value, cursorOffset, text);
+    setEditor(nextEditor);
+  };
+
+  function startVoiceCapture(continuous, generation) {
+    if (voiceCaptureRef.current?.isRunning || generation !== voiceGenerationRef.current) {
+      return;
+    }
+
+    voiceErrorRef.current = null;
+    const capture = new VoiceCapture({
+      onStatus: (status) => {
+        if (generation !== voiceGenerationRef.current || !mountedRef.current) {
+          return;
+        }
+
+        captureStatusRef.current = status;
+        refreshVoiceActivity();
+      },
+      onUtterance: (utterance) => {
+        if (generation !== voiceGenerationRef.current || !mountedRef.current) {
+          return;
+        }
+
+        if (!continuous) {
+          voiceCaptureRef.current = null;
+          captureStatusRef.current = "ready";
+        }
+
+        queueTranscription(utterance, generation);
+      },
+      onNoSpeech: () => {
+        if (generation !== voiceGenerationRef.current || !mountedRef.current) {
+          return;
+        }
+
+        voiceCaptureRef.current = null;
+        captureStatusRef.current = "ready";
+        voiceErrorRef.current = "No speech detected";
+        refreshVoiceActivity();
+      },
+      onError: (error) => {
+        if (generation !== voiceGenerationRef.current || !mountedRef.current) {
+          return;
+        }
+
+        voiceCaptureRef.current = null;
+        captureStatusRef.current = voiceMode === "key" ? "ready" : "off";
+        voiceErrorRef.current = getErrorMessage(error);
+        refreshVoiceActivity();
+      }
+    });
+
+    voiceCaptureRef.current = capture;
+    capture.start({continuous});
+  }
+
+  function queueTranscription(utterance, generation) {
+    const controller = new AbortController();
+    transcriptionControllersRef.current.add(controller);
+    pendingTranscriptionsRef.current += 1;
+    refreshVoiceActivity();
+
+    const request = transcribePcm({
+      ...utterance,
+      config,
+      signal: controller.signal
+    });
+
+    transcriptionQueueRef.current.enqueue(request, {
+      onSuccess: (result) => {
+        if (generation === voiceGenerationRef.current && mountedRef.current) {
+          insertTranscriptionRef.current(result.text);
+          voiceErrorRef.current = null;
+        }
+      },
+      onError: (error) => {
+        if (!controller.signal.aborted && generation === voiceGenerationRef.current && mountedRef.current) {
+          voiceErrorRef.current = getErrorMessage(error);
+        }
+      },
+      onSettled: () => {
+        transcriptionControllersRef.current.delete(controller);
+        pendingTranscriptionsRef.current = Math.max(0, pendingTranscriptionsRef.current - 1);
+
+        if (generation === voiceGenerationRef.current && mountedRef.current) {
+          refreshVoiceActivity();
+        }
+      }
+    });
+  }
+
+  function refreshVoiceActivity() {
+    if (!mountedRef.current) {
+      return;
+    }
+
+    setVoiceActivity(
+      getVoiceActivityLabel(
+        voiceMode,
+        captureStatusRef.current,
+        pendingTranscriptionsRef.current,
+        voiceErrorRef.current
+      )
+    );
   }
 
   function moveCursorOrHistory(value, cursorOffset, direction) {
@@ -1085,7 +1304,7 @@ function PromptEditor({selectedBaseModel, promptHistory, onSubmit, onExit}) {
     {flexDirection: "column"},
     h(InputPanel, {value: editor.value, cursorOffset: editor.cursorOffset, width: inputWidth, gutterWidth: promptGutterWidth}),
     h(CommandSuggestions, {suggestions, selectedSuggestion, width: inputWidth, gutterWidth: promptGutterWidth}),
-    h(StatusLine, {selectedBaseModel})
+    h(StatusLine, {selectedBaseModel, voiceMode, voiceActivity})
   );
 }
 
@@ -1130,7 +1349,7 @@ function InputPanel({value, cursorOffset, width, gutterWidth = 0, paddingY = inp
     Box,
     {flexDirection: "column", paddingLeft: gutterWidth},
     ...Array.from({length: paddingY}, (_unused, index) =>
-      h(InputSpacerLine, {key: `top-${index}`, width})
+      h(InputSpacerLine, {key: `top-${index}`})
     ),
     ...visualLines.map((line, index) =>
       h(InputLine, {
@@ -1142,7 +1361,7 @@ function InputPanel({value, cursorOffset, width, gutterWidth = 0, paddingY = inp
       })
     ),
     ...Array.from({length: paddingY}, (_unused, index) =>
-      h(InputSpacerLine, {key: `bottom-${index}`, width})
+      h(InputSpacerLine, {key: `bottom-${index}`})
     )
   );
 }
@@ -1183,38 +1402,100 @@ function getInputVisualLines(rawLines, cursor, width) {
   return visualLines;
 }
 
-function InputSpacerLine({width}) {
-  return h(Text, {backgroundColor: inputBg}, " ".repeat(width));
+function InputSpacerLine() {
+  return h(Text, null, " ");
 }
 
 function InputLine({line, width, isFirstLine, cursorColumn}) {
+  const rendered = formatInputLine(line, width, isFirstLine, cursorColumn);
+
+  return h(Text, null, rendered);
+}
+
+export function formatInputLine(line, width, isFirstLine, cursorColumn) {
+  const safeWidth = Math.max(1, Math.floor(width));
   const prefix = isFirstLine ? "> " : "  ";
   const text = `${prefix}${line}`;
   const cursorIndex = cursorColumn === null ? -1 : prefix.length + cursorColumn;
-  const padded = text.padEnd(width, " ");
-  const before = cursorIndex >= 0 ? padded.slice(0, cursorIndex) : padded;
-  const cursorChar = cursorIndex >= 0 ? padded[cursorIndex] ?? " " : "";
-  const after = cursorIndex >= 0 ? padded.slice(cursorIndex + 1) : "";
-
-  return h(
-    Box,
-    {backgroundColor: inputBg, width, height: 1},
-    h(Text, {backgroundColor: inputBg, color: inputFg}, before),
-    cursorIndex >= 0 ? h(Text, {backgroundColor: cursorBg, color: "white"}, cursorChar) : null,
-    cursorIndex >= 0 ? h(Text, {backgroundColor: inputBg, color: inputFg}, after) : null
-  );
+  const clipped = text.slice(0, safeWidth);
+  return cursorIndex >= 0 && cursorIndex < safeWidth
+    ? `${clipped.slice(0, cursorIndex)}▌${clipped.slice(cursorIndex + 1)}`
+    : clipped;
 }
 
-function StatusLine({selectedBaseModel}) {
+export function getSafeInputWidth(terminalWidth, gutterWidth = 0) {
+  const columns = Math.max(1, Math.floor(terminalWidth));
+  const gutter = Math.max(0, Math.floor(gutterWidth));
+  return Math.max(1, columns - gutter - 1);
+}
+
+function StatusLine({selectedBaseModel, voiceMode = "off", voiceActivity = "off"}) {
   const model = selectedBaseModel ? formatPromptModelName(selectedBaseModel.label) : "no-model";
   const cwd = formatPromptPath(process.cwd());
+  const voiceColor = voiceActivity === "recording" ? errorColor : voiceActivity.startsWith("error:") ? errorColor : successColor;
 
   return h(
     Box,
     {paddingLeft: 2},
     h(Text, {color: modelColor}, model),
     h(Text, {dimColor: true}, " · "),
-    h(Text, {color: pathColor}, cwd)
+    h(Text, {color: pathColor}, cwd),
+    h(Text, {dimColor: true}, " · "),
+    h(Text, {color: voiceMode === "off" ? undefined : voiceColor, dimColor: voiceMode === "off"}, `voice: ${voiceActivity}`)
+  );
+}
+
+function VoicePicker({currentMode, onSelect, onCancel}) {
+  const currentIndex = voiceModes.findIndex((mode) => mode.id === currentMode);
+  const [selectedIndex, setSelectedIndex] = useState(currentIndex >= 0 ? currentIndex : 0);
+
+  useInput((input, key) => {
+    if (/^[1-3]$/.test(input)) {
+      const mode = voiceModes[Number.parseInt(input, 10) - 1];
+
+      if (mode) {
+        onSelect(mode.id);
+      }
+
+      return;
+    }
+
+    if (key.upArrow) {
+      setSelectedIndex((index) => (index === 0 ? voiceModes.length - 1 : index - 1));
+      return;
+    }
+
+    if (key.downArrow) {
+      setSelectedIndex((index) => (index === voiceModes.length - 1 ? 0 : index + 1));
+      return;
+    }
+
+    if (key.return) {
+      onSelect(voiceModes[selectedIndex].id);
+      return;
+    }
+
+    if (key.escape) {
+      onCancel();
+    }
+  });
+
+  return h(
+    Box,
+    {flexDirection: "column", marginTop: 1},
+    h(Text, null, "Choose voice input mode"),
+    ...voiceModes.map((mode, index) => {
+      const isHighlighted = index === selectedIndex;
+      const current = mode.id === currentMode ? " (current)" : "";
+
+      return h(
+        Text,
+        {key: mode.id, color: isHighlighted ? modelColor : undefined, dimColor: !isHighlighted},
+        `${isHighlighted ? ">" : " "} ${index + 1}. ${mode.label}${current} · ${mode.description}`
+      );
+    }),
+    h(Text, null, ""),
+    h(Text, {dimColor: true}, "Use arrow keys or number keys. Enter selects. Esc cancels.")
   );
 }
 
@@ -1288,6 +1569,67 @@ function chooseBaseModelByInput(inputText, config, fallback) {
   const index = Number.parseInt(inputText, 10) - 1;
   const models = getAvailableModelChoices(config);
   return models[index] ?? fallback ?? models[0] ?? null;
+}
+
+export function chooseVoiceModeByInput(inputText) {
+  const normalized = String(inputText ?? "").trim().toLowerCase();
+  const aliases = {
+    "1": "off",
+    off: "off",
+    "2": "key",
+    key: "key",
+    tab: "key",
+    "3": "free",
+    free: "free"
+  };
+  return aliases[normalized] ?? null;
+}
+
+function getVoiceModeLabel(mode) {
+  return voiceModes.find((item) => item.id === mode)?.label ?? "Off";
+}
+
+export function getVoiceActivityLabel(mode, captureStatus, pendingTranscriptions = 0, error = null) {
+  if (error) {
+    return `error: ${error}`;
+  }
+
+  if (mode === "off") {
+    return "off";
+  }
+
+  if (pendingTranscriptions > 0) {
+    return mode === "free" ? "listening · transcribing" : "transcribing";
+  }
+
+  if (captureStatus === "recording") {
+    return "recording";
+  }
+
+  if (mode === "free") {
+    return "listening";
+  }
+
+  return "Tab to talk";
+}
+
+export function insertDictationText(value, cursorOffset, transcript) {
+  const text = String(transcript ?? "").replace(/\s+/g, " ").trim();
+
+  if (!text) {
+    return {value, cursorOffset};
+  }
+
+  const before = value.slice(0, cursorOffset);
+  const after = value.slice(cursorOffset);
+  const needsLeadingSpace = before.length > 0 && !/\s$/.test(before) && !/^[,.;:!?)]/.test(text);
+  const needsTrailingSpace = after.length > 0 && !/^\s/.test(after) && !/^[,.;:!?)]/.test(after);
+  const inserted = `${needsLeadingSpace ? " " : ""}${text}${needsTrailingSpace ? " " : ""}`;
+
+  return {
+    value: `${before}${inserted}${after}`,
+    cursorOffset: cursorOffset + inserted.length
+  };
 }
 
 export async function buildRouterEntry(prompt, config, selectedBaseModel, approvalRequired = true) {
