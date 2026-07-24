@@ -1,10 +1,10 @@
-# AutoRouter
+# Autorouter
 
 An interactive terminal agent that routes one task across multiple models and tools.
 
 Most CLI agents are designed around one model for the whole task. That design limits flexibility and cost control. Real tasks often split into smaller pieces: planning, current data lookup, code inspection, file edits, review, and final synthesis. Those pieces do not always need the same model.
 
-AutoRouter lets a base model analyze your prompt, break it into execution stages, choose from your configured model inventory, ask for approval, run the stages, and return one final answer with a cost review.
+Autorouter lets a base model analyze your prompt, break it into execution stages, choose from your configured model inventory, ask for approval, run the stages, and return one final answer with a cost review.
 
 ## Quick Start
 
@@ -60,7 +60,7 @@ GROQ_API_KEY=
 EXA_API_KEY=
 ```
 
-Every key is optional, but AutoRouter only considers providers whose keys are configured. For example, if only `KIMI_API_KEY` and `EXA_API_KEY` are set, the base model picker and execution planner will only use Kimi models plus Exa web search.
+Every key is optional, but Autorouter only considers providers whose keys are configured. For example, if only `KIMI_API_KEY` and `EXA_API_KEY` are set, the base model picker and execution planner will only use Kimi models plus Exa web search.
 
 `.env.local` is ignored by Git and should never be committed.
 
@@ -68,7 +68,7 @@ Every key is optional, but AutoRouter only considers providers whose keys are co
 
 ### With One Model Provider Key
 
-AutoRouter can launch, choose a base model, plan stages, execute model only stages, and produce a cost review when pricing is configured.
+Autorouter can launch, choose a base model, plan stages, execute model only stages, and produce a cost review when pricing is configured.
 
 Example:
 
@@ -78,7 +78,7 @@ explain the difference between agent routing and model selection
 
 ### With Exa
 
-AutoRouter can search current sources for questions that should not rely on model memory.
+Autorouter can search current sources for questions that should not rely on model memory.
 
 Example:
 
@@ -88,7 +88,7 @@ summarize the latest Node.js LTS release notes
 
 ### With Local Workspace Access
 
-AutoRouter can inspect the current working directory, read files, create files, and edit files inside the project.
+Autorouter can inspect the current working directory, read files, create files, and edit files inside the project.
 
 Example:
 
@@ -104,17 +104,17 @@ Use `/model` to choose the base planning model. The picker only shows models fro
 
 ### Stage Routing
 
-The base model decides whether to clarify, fail, or split the task into stages. Each stage can use a different configured model or tool. AutoRouter rejects invented model IDs.
+The base model decides whether to clarify, fail, or split the task into stages. Each stage can use a different configured model or tool. Autorouter rejects invented model IDs.
 
 ### Approval Flow
 
-Before execution, AutoRouter shows the planned route and asks for approval.
+Before execution, Autorouter shows the planned route and asks for approval.
 
 Approval options:
 
 1. Yes.
 2. Yes, and accept all execution for this session.
-3. No, and tell AutoRouter what to do instead.
+3. No, and tell Autorouter what to do instead.
 
 ### Voice Input
 
@@ -124,7 +124,7 @@ Use `/voice` to choose a dictation mode. Voice input uses Groq's `whisper-large-
 2. Press Tab and talk starts one recording when Tab is pressed. Two seconds of silence ends and transcribes it.
 3. Speak freely listens while the main prompt editor is open, detects utterances, and appends each transcription in order.
 
-Press Escape to cancel an active Tab recording. Audio is held in memory while it is recorded and is sent to Groq for transcription. AutoRouter does not save recordings to disk.
+Press Escape to cancel an active Tab recording. Audio is held in memory while it is recorded and is sent to Groq for transcription. Autorouter does not save recordings to disk.
 
 ### Web Search
 
@@ -140,7 +140,7 @@ Local file tools are scoped to the current working directory.
 
 ### Cost Review
 
-After execution, AutoRouter shows planning cost, stage cost, final synthesis cost, percentage share, and total cost. Provider token usage is converted into dollar estimates when pricing is configured. Exa search cost is included when available.
+After execution, Autorouter shows planning cost, stage cost, final synthesis cost, percentage share, and total cost. Provider token usage is converted into dollar estimates when pricing is configured. Exa search cost is included when available.
 
 ### Terminal Experience
 
@@ -158,15 +158,15 @@ After execution, AutoRouter shows planning cost, stage cost, final synthesis cos
 1. The user enters a task in the terminal.
 2. The selected base model receives runtime context, workspace context, and the enabled model inventory.
 3. The base model returns either a clarification question, an error, or a stage plan.
-4. AutoRouter validates that every stage uses a configured model and allowed tools.
+4. Autorouter validates that every stage uses a configured model and allowed tools.
 5. The user approves execution.
-6. AutoRouter runs each stage, passing prior stage results forward.
+6. Autorouter runs each stage, passing prior stage results forward.
 7. A final synthesis model returns one user facing answer.
-8. AutoRouter prints a cost review.
+8. Autorouter prints a cost review.
 
 ## Provider Model
 
-AutoRouter is not limited to one fixed provider list. A provider needs:
+Autorouter is not limited to one fixed provider list. A provider needs:
 
 1. An API key supplied by the user.
 2. A provider entry in `autorouter.config.json`.
@@ -195,7 +195,7 @@ Pricing is stored as dollars per 1 million tokens:
 ## Repository Architecture
 
 ```text
-AutoRouter/
+Autorouter/
   bin/auto
     CLI entrypoint.
 
@@ -258,7 +258,7 @@ create docs/setup-checklist.md with a short local setup checklist
 ```
 
 ```text
-update README.md to mention that AutoRouter supports Exa web search
+update README.md to mention that Autorouter supports Exa web search
 ```
 
 ## Development Checks

@@ -354,7 +354,7 @@ function resolveWorkspaceFile(root, filePath) {
   }
 
   if (!isReadableProjectFile(path.basename(relativePath))) {
-    return {ok: false, reason: "file type is not editable by AutoRouter"};
+    return {ok: false, reason: "file type is not editable by Autorouter"};
   }
 
   return {ok: true, absolutePath, relativePath};
@@ -409,7 +409,7 @@ function resolveWorkspaceWritePath(root, filePath) {
   }
 
   if (!isReadableProjectFile(path.basename(relativePath))) {
-    return {ok: false, reason: "file type is not writable by AutoRouter"};
+    return {ok: false, reason: "file type is not writable by Autorouter"};
   }
 
   return {ok: true, absolutePath, relativePath};

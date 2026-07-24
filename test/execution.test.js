@@ -148,9 +148,9 @@ test("runExecution falls back to stage results when final synthesis is empty", a
 
     assert.equal(calls.length, 2);
     assert.deepEqual(activities.map((activity) => activity.detail), [
-      "AutoRouter execution",
+      "Autorouter execution",
       "Kimi Test · $0.000140",
-      "AutoRouter execution"
+      "Autorouter execution"
     ]);
     assert.equal(result.lines[0], "stage result answer");
     assert.ok(result.lines.includes("[Cost Review]"));

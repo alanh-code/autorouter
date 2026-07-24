@@ -29,7 +29,7 @@ export async function runExecution({config, execution, signal, onActivity}) {
     status: "success",
     stage: "prepare execution",
     title: "Prepared",
-    detail: "AutoRouter execution",
+    detail: "Autorouter execution",
     items: [
       {action: "Read", target: CONFIG_FILE},
       {action: "Loaded", target: `${execution.routes.length} routed stages`}
@@ -200,7 +200,7 @@ export async function runExecution({config, execution, signal, onActivity}) {
     status: "success",
     stage: "finalize",
     title: "Done",
-    detail: "AutoRouter execution",
+    detail: "Autorouter execution",
     items: [{action: "Produced", target: `${stageResults.length} stage results`}]
   });
 
@@ -317,7 +317,7 @@ function buildStageExecutionMessages(task, route, previousResults) {
     {
       role: "system",
       content: [
-        "You are an AutoRouter execution model.",
+        "You are an Autorouter execution model.",
         "Complete only the assigned stage.",
         "Do not claim to edit files, run shell commands, browse, or call tools.",
         "Do not invent current facts. If current external data is missing, say what data is missing.",
@@ -353,7 +353,7 @@ function buildFileEditMessages(task, route, previousResults, codebaseResult) {
     {
       role: "system",
       content: [
-        "You are an AutoRouter local file edit planner.",
+        "You are an Autorouter local file edit planner.",
         "Return only JSON.",
         "Plan exact text replacements for existing local files.",
         "Do not include shell commands.",
@@ -396,7 +396,7 @@ function buildFileWriteMessages(task, route, previousResults, codebaseResult) {
     {
       role: "system",
       content: [
-        "You are an AutoRouter local file creation planner.",
+        "You are an Autorouter local file creation planner.",
         "Return only JSON.",
         "Plan new file writes for the current working directory.",
         "Do not include shell commands.",
@@ -443,7 +443,7 @@ function buildFinalAnswerMessages(task, stageResults) {
     {
       role: "system",
       content: [
-        "You are AutoRouter's final answer writer.",
+        "You are Autorouter's final answer writer.",
         "Answer the user's original question directly.",
         "If the user asked multiple things, answer every part.",
         "Use the stage results as working context, but do not mention internal stages.",

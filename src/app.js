@@ -73,13 +73,13 @@ const slashCommands = [
     id: "exit",
     name: "exit",
     displayText: "/exit",
-    description: "Close AutoRouter"
+    description: "Close Autorouter"
   },
   {
     id: "quit",
     name: "quit",
     displayText: "/quit",
-    description: "Close AutoRouter"
+    description: "Close Autorouter"
   }
 ];
 
@@ -93,11 +93,11 @@ export function main() {
     return;
   }
 
-  render(h(AutoRouterApp, {config: loadConfig()}), {exitOnCtrlC: false});
+  render(h(AutorouterApp, {config: loadConfig()}), {exitOnCtrlC: false});
 }
 
 
-function AutoRouterApp({config}) {
+function AutorouterApp({config}) {
   const {exit} = useApp();
   const availableModelChoices = getAvailableModelChoices(config);
   const [selectedBaseModel, setSelectedBaseModel] = useState(availableModelChoices[0] ?? null);
@@ -107,7 +107,7 @@ function AutoRouterApp({config}) {
       id: "intro",
       type: "text",
       lines: [
-        "AutoRouter",
+        "Autorouter",
         "Type /model to choose a base model, /voice for dictation, /help for commands, or enter a task."
       ]
     }
@@ -158,7 +158,7 @@ function AutoRouterApp({config}) {
             "3. /voice           Choose voice input mode",
             "4. /voice <number>  Choose voice mode by number",
             "5. /help            Show commands",
-            "6. /exit            Close AutoRouter",
+            "6. /exit            Close Autorouter",
             "",
             "Use Shift+Enter or a trailing backslash before Enter for a new line."
           ]
@@ -296,7 +296,7 @@ function AutoRouterApp({config}) {
 
     appendEntries([
       {type: "user", text},
-      {type: "text", lines: ["Execution canceled.", `AutoRouter should: ${text}`]}
+      {type: "text", lines: ["Execution canceled.", `Autorouter should: ${text}`]}
     ]);
     setPendingExecution(null);
     setMode("chat");
@@ -497,7 +497,7 @@ function RouterResponseEntry({entry}) {
   return h(
     Box,
     {flexDirection: "column", marginBottom: 1},
-    h(ResponseLine, null, h(Text, {color: modelColor}, "AutoRouter")),
+    h(ResponseLine, null, h(Text, {color: modelColor}, "Autorouter")),
     h(ResponseLine, null, h(Text, null, `Base model: ${entry.baseModel}`)),
     h(ResponseLine, null, h(Text, null, "Stages")),
     ...entry.routes.flatMap((route, index) => getRoutePreviewLines(route, index).map((line, lineIndex) => h(
@@ -669,7 +669,7 @@ function ExecutionApproval({pendingExecution, onApprove, onApproveSession, onRej
   const options = [
     {value: "yes", label: "Yes"},
     {value: "yes-session", label: "Yes, and accept all execution this session"},
-    {value: "no", label: "No. Tell AutoRouter what to do instead"}
+    {value: "no", label: "No. Tell Autorouter what to do instead"}
   ];
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -719,7 +719,7 @@ function ExecutionApproval({pendingExecution, onApprove, onApproveSession, onRej
   return h(
     Box,
     {flexDirection: "column", borderStyle: "round", borderColor: modelColor, borderLeft: false, borderRight: false, borderBottom: false, marginTop: 1, paddingX: 1},
-    h(Text, {color: modelColor}, "AutoRouter needs approval to execute"),
+    h(Text, {color: modelColor}, "Autorouter needs approval to execute"),
     h(Text, {dimColor: true}, pendingExecution ? `Task: ${pendingExecution.task}` : "Review the routed plan before execution."),
     h(Text, null, ""),
     ...options.map((option, index) =>
@@ -816,7 +816,7 @@ function ExecutionFeedbackEditor({onSubmit, onCancel}) {
   return h(
     Box,
     {flexDirection: "column", marginTop: 1},
-    h(Text, {color: modelColor}, "Tell AutoRouter what to do instead"),
+    h(Text, {color: modelColor}, "Tell Autorouter what to do instead"),
     h(Text, {dimColor: true}, "Press Enter to submit. Esc cancels."),
     h(InputPanel, {value: editor.value, cursorOffset: editor.cursorOffset, width})
   );
@@ -1549,7 +1549,7 @@ function ModelPicker({config, currentModel, onSelect, onCancel}) {
     ...(models.length === 0
       ? [
           h(Text, {key: "empty"}, "No available base models."),
-          h(Text, {key: "hint", dimColor: true}, "Add an enabled provider API key to .env.local, then restart AutoRouter.")
+          h(Text, {key: "hint", dimColor: true}, "Add an enabled provider API key to .env.local, then restart Autorouter.")
         ]
       : models.map((model, index) => {
       const isHighlighted = index === selectedIndex;
@@ -1682,7 +1682,7 @@ export async function buildRouterEntry(prompt, config, selectedBaseModel, approv
 
 async function analyzeTaskWithBaseModel(prompt, config, selectedBaseModel) {
   if (!selectedBaseModel) {
-    return {error: "no available base model. Add a provider API key to .env.local and restart AutoRouter"};
+    return {error: "no available base model. Add a provider API key to .env.local and restart Autorouter"};
   }
 
   const baseModel = normalizeBaseModel(selectedBaseModel);
@@ -1753,7 +1753,7 @@ function buildStageAnalysisMessages(prompt, config) {
     {
       role: "system",
       content: [
-        "You are AutoRouter's base model. Return only JSON.",
+        "You are Autorouter's base model. Return only JSON.",
         "Goal: decide whether to clarify, fail, or split the task into execution stages.",
         "Clarify first if a missing requirement materially affects the task plan, model choice, tool choice, safety, cost, or final answer quality.",
         "Do not guess or infer missing requirements.",

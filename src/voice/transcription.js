@@ -7,7 +7,7 @@ export const DEFAULT_VOICE_CONFIG = {
   model: "whisper-large-v3-turbo"
 };
 export const DEFAULT_TRANSCRIPTION_MODEL = DEFAULT_VOICE_CONFIG.model;
-const TRANSCRIPTION_PROMPT = "The speaker is dictating a prompt for AutoRouter, a terminal AI agent. Preserve technical terms, filenames, CLI commands, and model names accurately.";
+const TRANSCRIPTION_PROMPT = "The speaker is dictating a prompt for Autorouter, a terminal AI agent. Preserve technical terms, filenames, CLI commands, and model names accurately.";
 
 export function getVoiceAvailabilityError(config) {
   const voice = getVoiceConfig(config);
