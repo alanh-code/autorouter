@@ -280,10 +280,3 @@ Run the CLI:
 ```bash
 npm start
 ```
-
-## Safety Notes
-
-1. Do not commit `.env.local`.
-2. Keep real API keys out of prompts, screenshots, issues, and commits.
-3. Rotate any key that was pasted into chat or exposed in logs.
-4. Review `npm pack --dry-run` before publishing.
