@@ -1,5 +1,5 @@
-import {EXA_DEFAULT_BASE_URL} from "../constants.js";
-import {formatDollarCost, parseDollarText} from "../costs.js";
+import {EXA_DEFAULT_BASE_URL} from "../../../constants.js";
+import {formatDollarCost, parseDollarText} from "../../../costs.js";
 
 export function buildWebSearchQuery(task, route) {
   return [

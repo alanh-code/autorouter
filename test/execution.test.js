@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {runExecution} from "../src/execution.js";
+import {runExecution} from "../src/legacy/terminal/execution.js";
 
 test("runExecution completes model stage and final synthesis", async () => {
   process.env.AUTOROUTER_TEST_KEY = "test-key";

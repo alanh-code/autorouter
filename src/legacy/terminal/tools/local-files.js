@@ -8,8 +8,8 @@ import {
   MAX_FILE_WRITES_PER_STAGE,
   MAX_LOCAL_FILE_CHARS,
   MAX_WORKSPACE_SNAPSHOT_FILES
-} from "../constants.js";
-import {getErrorMessage, limitInputText} from "../utils/text.js";
+} from "../../../constants.js";
+import {getErrorMessage, limitInputText} from "../../../utils/text.js";
 
 export function getWorkspaceSnapshotForAnalysis(root) {
   const files = listCodebaseFiles(root);

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {buildRouterEntry, getRoutePreviewLines} from "../src/app.js";
+import {buildRouterEntry, getRoutePreviewLines} from "../src/legacy/terminal/app.js";
 
 test("router clarification path uses base model clarification", async () => {
   process.env.AUTOROUTER_TEST_KEY = "test-key";

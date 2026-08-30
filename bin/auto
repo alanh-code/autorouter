@@ -1,5 +1,5 @@
 #!/usr/bin/env node
 
-import {main} from "../src/app.js";
+import {main} from "../src/legacy/terminal/index.js";
 
 main();

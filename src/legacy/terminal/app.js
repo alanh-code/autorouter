@@ -2,11 +2,11 @@ import React, {useEffect, useRef, useState} from "react";
 import {Box, Static, Text, render, useApp, useInput, useStdout} from "ink";
 import {
   MAX_TASK_INPUT_CHARS
-} from "./constants.js";
-import {initConfig, loadConfig, loadLocalEnv} from "./config.js";
-import {formatUsageCost} from "./costs.js";
+} from "../../constants.js";
+import {initConfig, loadConfig, loadLocalEnv} from "../../config.js";
+import {formatUsageCost} from "../../costs.js";
 import {runExecution} from "./execution.js";
-import {callChatCompletion} from "./providers/chat.js";
+import {callChatCompletion} from "../../providers/chat.js";
 import {
   getAvailableModelChoices,
   getEnabledModelById,
@@ -16,7 +16,7 @@ import {
   isProviderAvailable,
   normalizeBaseModel,
   parseModelId
-} from "./providers/inventory.js";
+} from "../../providers/inventory.js";
 import {
   normalizeAnalyzedStages,
   normalizeClarificationQuestion,
@@ -31,8 +31,8 @@ import {
   stripMarkdown,
   truncateText,
   wrapPlainText
-} from "./utils/text.js";
-import {getRuntimeContext} from "./utils/runtime.js";
+} from "../../utils/text.js";
+import {getRuntimeContext} from "../../utils/runtime.js";
 import {VoiceCapture} from "./voice/recorder.js";
 import {OrderedAsyncQueue} from "./voice/queue.js";
 import {getVoiceAvailabilityError, transcribePcm} from "./voice/transcription.js";

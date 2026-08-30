@@ -1,4 +1,4 @@
-import {allowedStageTools} from "../constants.js";
+import {allowedStageTools} from "../../../constants.js";
 
 export function normalizeClarificationQuestion(parsed) {
   const question = String(parsed?.clarification ?? parsed?.question ?? "").trim();

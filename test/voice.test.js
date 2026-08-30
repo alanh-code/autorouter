@@ -6,15 +6,15 @@ import {
   getSafeInputWidth,
   getVoiceActivityLabel,
   insertDictationText
-} from "../src/app.js";
-import {encodePcmWav, getPcmRms, SpeechSegmenter} from "../src/voice/audio.js";
-import {VoiceCapture} from "../src/voice/recorder.js";
-import {OrderedAsyncQueue} from "../src/voice/queue.js";
+} from "../src/legacy/terminal/app.js";
+import {encodePcmWav, getPcmRms, SpeechSegmenter} from "../src/legacy/terminal/voice/audio.js";
+import {VoiceCapture} from "../src/legacy/terminal/voice/recorder.js";
+import {OrderedAsyncQueue} from "../src/legacy/terminal/voice/queue.js";
 import {
   DEFAULT_TRANSCRIPTION_MODEL,
   getVoiceAvailabilityError,
   transcribePcm
-} from "../src/voice/transcription.js";
+} from "../src/legacy/terminal/voice/transcription.js";
 
 test("encodes mono 16-bit PCM as a valid WAV buffer", () => {
   const wav = encodePcmWav(new Int16Array([0, 32767, -32768]), 16000);

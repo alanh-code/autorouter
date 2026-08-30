@@ -4,7 +4,7 @@ import {
   normalizeAnalyzedStages,
   normalizeClarificationQuestion,
   validateStageModelIds
-} from "../src/router/analysis.js";
+} from "../src/legacy/terminal/router/analysis.js";
 
 test("normalizes model clarification question", () => {
   assert.equal(

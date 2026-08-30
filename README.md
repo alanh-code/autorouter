@@ -199,8 +199,8 @@ Autorouter/
   bin/auto
     CLI entrypoint.
 
-  src/app.js
-    Ink terminal UI, input handling, slash commands, route preview, and base model prompt.
+  src/legacy/terminal/
+    Temporary legacy terminal entrypoint, Ink UI, stage execution, voice input, and agent tools.
 
   src/config.js
     Config loading, local env loading, and default config creation.
@@ -211,20 +211,8 @@ Autorouter/
   src/costs.js
     Token and tool cost formatting.
 
-  src/execution.js
-    Stage execution, tool dispatch, final synthesis, and cost review assembly.
-
   src/providers/
     Chat completion adapter and enabled model inventory helpers.
-
-  src/voice/
-    Microphone capture, speech detection, WAV encoding, and transcription.
-
-  src/router/
-    Base model response normalization and validation.
-
-  src/tools/
-    Exa web search plus local file read, write, and edit tools.
 
   src/utils/
     Runtime context and text helpers.

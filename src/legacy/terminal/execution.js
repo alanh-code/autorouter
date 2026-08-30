@@ -8,10 +8,10 @@ import {
   fileEditTool,
   fileWriteTool,
   localCodebaseTool
-} from "./constants.js";
-import {formatDollarCost, formatUsageCost, parseDollarText} from "./costs.js";
-import {callChatCompletion} from "./providers/chat.js";
-import {getProviderConfig} from "./providers/inventory.js";
+} from "../../constants.js";
+import {formatDollarCost, formatUsageCost, parseDollarText} from "../../costs.js";
+import {callChatCompletion} from "../../providers/chat.js";
+import {getProviderConfig} from "../../providers/inventory.js";
 import {buildWebSearchQuery, callWebSearchTool, combineToolUsage} from "./tools/exa.js";
 import {
   applyFileEditPlan,
@@ -20,8 +20,8 @@ import {
   formatFileWriteResult,
   inspectLocalCodebase
 } from "./tools/local-files.js";
-import {getRuntimeContext} from "./utils/runtime.js";
-import {getErrorMessage, limitInputText, parseJsonObject, stripMarkdown} from "./utils/text.js";
+import {getRuntimeContext} from "../../utils/runtime.js";
+import {getErrorMessage, limitInputText, parseJsonObject, stripMarkdown} from "../../utils/text.js";
 
 export async function runExecution({config, execution, signal, onActivity}) {
   onActivity({
