@@ -9,7 +9,7 @@ import {
   fileWriteTool,
   localCodebaseTool
 } from "../../constants.js";
-import {formatDollarCost, formatUsageCost, parseDollarText} from "../../costs.js";
+import {formatDollarCost, formatUsageCost, parseDollarText} from "../../core/costs.js";
 import {callChatCompletion} from "../../providers/chat.js";
 import {getProviderConfig} from "../../providers/inventory.js";
 import {buildWebSearchQuery, callWebSearchTool, combineToolUsage} from "./tools/exa.js";

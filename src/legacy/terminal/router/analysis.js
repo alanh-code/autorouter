@@ -30,29 +30,6 @@ export function normalizeAnalyzedStages(stages) {
     .slice(0, 6);
 }
 
-export function validateStageModelIds(stages, enabledModels) {
-  if (stages.length === 0) {
-    return "";
-  }
-
-  const enabledModelIds = new Set(enabledModels.map((model) => model.id));
-  const missing = stages.filter((stage) => !stage.modelId).map((stage) => stage.label);
-
-  if (missing.length > 0) {
-    return `base model omitted modelId for stages: ${missing.join(", ")}`;
-  }
-
-  const invalid = stages.filter((stage) => !enabledModelIds.has(stage.modelId));
-
-  if (invalid.length > 0) {
-    const available = enabledModels.map((model) => model.id).join(", ");
-    const invalidChoices = invalid.map((stage) => `${stage.label} -> ${stage.modelId}`).join(", ");
-    return `base model selected unavailable model IDs: ${invalidChoices}. Available models: ${available}`;
-  }
-
-  return "";
-}
-
 function normalizeStageTools(tools) {
   if (!Array.isArray(tools)) {
     return [];

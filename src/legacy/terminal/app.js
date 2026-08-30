@@ -4,7 +4,8 @@ import {
   MAX_TASK_INPUT_CHARS
 } from "../../constants.js";
 import {initConfig, loadConfig, loadLocalEnv} from "../../config.js";
-import {formatUsageCost} from "../../costs.js";
+import {formatUsageCost} from "../../core/costs.js";
+import {validateStageModelIds} from "../../core/routing.js";
 import {runExecution} from "./execution.js";
 import {callChatCompletion} from "../../providers/chat.js";
 import {
@@ -19,8 +20,7 @@ import {
 } from "../../providers/inventory.js";
 import {
   normalizeAnalyzedStages,
-  normalizeClarificationQuestion,
-  validateStageModelIds
+  normalizeClarificationQuestion
 } from "./router/analysis.js";
 import {getWorkspaceSnapshotForAnalysis} from "./tools/local-files.js";
 import {

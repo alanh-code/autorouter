@@ -7,6 +7,7 @@ import {fileURLToPath} from "node:url";
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(testDirectory, "..");
 const sourceRoot = path.join(projectRoot, "src");
+const coreRoot = path.join(sourceRoot, "core");
 const legacyRoot = path.join(sourceRoot, "legacy");
 
 test("the CLI enters the application through the legacy terminal boundary", async () => {
@@ -24,6 +25,13 @@ test("reusable source modules do not import the legacy terminal runtime", () => 
   for (const filePath of sourceFiles) {
     const source = fs.readFileSync(filePath, "utf8");
     assert.doesNotMatch(source, /from\s+["'][^"']*legacy\/terminal[^"']*["']/);
+  }
+});
+
+test("core modules do not access process environment or terminal dependencies", () => {
+  for (const filePath of listJavaScriptFiles(coreRoot)) {
+    const source = fs.readFileSync(filePath, "utf8");
+    assert.doesNotMatch(source, /process\.env|legacy\/terminal|from\s+["'](?:ink|react)["']/);
   }
 });
 

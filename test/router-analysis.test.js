@@ -2,8 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   normalizeAnalyzedStages,
-  normalizeClarificationQuestion,
-  validateStageModelIds
+  normalizeClarificationQuestion
 } from "../src/legacy/terminal/router/analysis.js";
 
 test("normalizes model clarification question", () => {
@@ -35,15 +34,5 @@ test("normalizes stages and drops unknown tools", () => {
         tools: ["web_search"]
       }
     ]
-  );
-});
-
-test("validates model IDs against enabled inventory", () => {
-  assert.equal(
-    validateStageModelIds(
-      [{label: "summarize", modelId: "missing:model"}],
-      [{id: "deepseek:deepseek-v4-flash"}]
-    ),
-    "base model selected unavailable model IDs: summarize -> missing:model. Available models: deepseek:deepseek-v4-flash"
   );
 });

@@ -208,8 +208,8 @@ Autorouter/
   src/constants.js
     Shared limits and allowed tool names.
 
-  src/costs.js
-    Token and tool cost formatting.
+  src/core/
+    Pure model inventory, ID parsing, routing validation, and cost calculation.
 
   src/providers/
     Chat completion adapter and enabled model inventory helpers.
