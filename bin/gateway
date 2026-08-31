@@ -1,0 +1,29 @@
+#!/usr/bin/env node
+
+import {loadConfig, loadLocalEnv} from "../src/config.js";
+import {createGatewayServer} from "../src/gateway/index.js";
+
+loadLocalEnv();
+
+const config = loadConfig();
+const models = Array.isArray(config.baseModels) ? config.baseModels : [];
+const port = parsePort(process.env.AUTOROUTER_PORT);
+const server = createGatewayServer({models});
+
+server.listen(port, "127.0.0.1", () => {
+  console.log(`AutoRouter gateway listening on http://127.0.0.1:${port}`);
+});
+
+function parsePort(value) {
+  if (value === undefined) {
+    return 8787;
+  }
+
+  const port = Number.parseInt(value, 10);
+
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("AUTOROUTER_PORT must be an integer between 1 and 65535");
+  }
+
+  return port;
+}

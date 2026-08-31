@@ -199,6 +199,9 @@ Autorouter/
   bin/auto
     CLI entrypoint.
 
+  bin/gateway
+    Local OpenAI-compatible HTTP gateway entrypoint.
+
   src/legacy/terminal/
     Temporary legacy terminal entrypoint, Ink UI, stage execution, voice input, and agent tools.
 
@@ -210,6 +213,9 @@ Autorouter/
 
   src/core/
     Pure model inventory, ID parsing, routing validation, and cost calculation.
+
+  src/gateway/
+    OpenAI-compatible models, responses, error, and streaming protocol handling.
 
   src/providers/
     Chat completion adapter and enabled model inventory helpers.
