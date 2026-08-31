@@ -1,6 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createGatewayServer} from "../src/gateway/index.js";
+import {
+  createGatewayServer,
+  DEFAULT_GATEWAY_HOST,
+  resolveGatewayHost
+} from "../src/gateway/index.js";
+
+test("binds the gateway to IPv4 loopback by default", () => {
+  assert.equal(DEFAULT_GATEWAY_HOST, "127.0.0.1");
+  assert.equal(resolveGatewayHost(undefined), "127.0.0.1");
+});
+
+test("uses a non-loopback host only when explicitly configured", () => {
+  assert.equal(resolveGatewayHost(" 0.0.0.0 "), "0.0.0.0");
+});
+
+test("rejects an empty configured gateway host", () => {
+  assert.throws(
+    () => resolveGatewayHost("   "),
+    /AUTOROUTER_HOST must not be empty/
+  );
+});
 
 test("lists configured models with the OpenAI model schema", async () => {
   const server = createGatewayServer({

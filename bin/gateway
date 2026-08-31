@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 
 import {loadConfig, loadLocalEnv} from "../src/config.js";
-import {createGatewayServer} from "../src/gateway/index.js";
+import {createGatewayServer, resolveGatewayHost} from "../src/gateway/index.js";
 
 loadLocalEnv();
 
 const config = loadConfig();
 const models = Array.isArray(config.baseModels) ? config.baseModels : [];
+const host = resolveGatewayHost(process.env.AUTOROUTER_HOST);
 const port = parsePort(process.env.AUTOROUTER_PORT);
 const server = createGatewayServer({models});
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`AutoRouter gateway listening on http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  console.log(`AutoRouter gateway listening on http://${host}:${port}`);
 });
 
 function parsePort(value) {

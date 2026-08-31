@@ -28,6 +28,14 @@ npm link
 auto
 ```
 
+Run the local gateway:
+
+```bash
+npm run gateway
+```
+
+The gateway listens on `127.0.0.1:8787` by default. Set `AUTOROUTER_HOST` only when you intentionally want to expose it on another network interface.
+
 Create a default config file if needed:
 
 ```bash
