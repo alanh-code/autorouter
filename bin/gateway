@@ -2,6 +2,7 @@
 
 import {loadConfig, loadLocalEnv} from "../src/config.js";
 import {
+  configureUpstreamCredential,
   createGatewayServer,
   loadOrCreateLocalApiKey,
   resolveGatewayHost,
@@ -16,10 +17,20 @@ if (command === "key") {
   console.log(loadOrCreateLocalApiKey());
 } else if (command === "rotate-key") {
   console.log(rotateLocalApiKey());
+} else if (command === "configure-upstream") {
+  await configureUpstream(process.argv[3]);
 } else if (command === undefined) {
   startGateway();
 } else {
   throw new Error(`Unknown gateway command: ${command}`);
+}
+
+async function configureUpstream(gateway) {
+  const apiKey = process.env.AUTOROUTER_UPSTREAM_API_KEY;
+  delete process.env.AUTOROUTER_UPSTREAM_API_KEY;
+
+  const result = await configureUpstreamCredential({gateway, apiKey});
+  console.log(`Configured ${result.gateway} with ${result.modelCount} available models.`);
 }
 
 function startGateway() {

@@ -9,6 +9,12 @@ export {
   rotateLocalApiKey
 } from "./auth.js";
 export {
+  configureUpstreamCredential,
+  getUpstreamCredentialPath,
+  loadUpstreamCredential,
+  UPSTREAM_GATEWAYS
+} from "./upstream-credentials.js";
+export {
   createCompletedResponse,
   createModelList,
   createResponseEvents,

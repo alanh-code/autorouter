@@ -45,6 +45,17 @@ npm run gateway -- rotate-key
 
 Send this local key as a Bearer token to the gateway. The key is stored in `~/.autorouter/local-api-key` with user-only file permissions. Rotating it replaces the stored key; restart the gateway to apply it.
 
+Configure one upstream gateway credential:
+
+```bash
+read -s AUTOROUTER_UPSTREAM_API_KEY
+export AUTOROUTER_UPSTREAM_API_KEY
+npm run gateway -- configure-upstream openrouter
+unset AUTOROUTER_UPSTREAM_API_KEY
+```
+
+Use `ramp-router` instead of `openrouter` to select Ramp Router. Autorouter validates the key and its available model catalog, then stores the selected gateway and credential in `~/.autorouter/upstream.json` with user-only file permissions. Configuring another gateway replaces the previous credential.
+
 Create a default config file if needed:
 
 ```bash
