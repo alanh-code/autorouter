@@ -36,6 +36,15 @@ npm run gateway
 
 The gateway listens on `127.0.0.1:8787` by default. Set `AUTOROUTER_HOST` only when you intentionally want to expose it on another network interface.
 
+View the generated local API key or rotate it:
+
+```bash
+npm run gateway -- key
+npm run gateway -- rotate-key
+```
+
+Send this local key as a Bearer token to the gateway. The key is stored in `~/.autorouter/local-api-key` with user-only file permissions. Rotating it replaces the stored key; restart the gateway to apply it.
+
 Create a default config file if needed:
 
 ```bash

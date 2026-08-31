@@ -6,6 +6,8 @@ import {
   resolveGatewayHost
 } from "../src/gateway/index.js";
 
+const TEST_LOCAL_API_KEY = "ar_local_gateway-test-key";
+
 test("binds the gateway to IPv4 loopback by default", () => {
   assert.equal(DEFAULT_GATEWAY_HOST, "127.0.0.1");
   assert.equal(resolveGatewayHost(undefined), "127.0.0.1");
@@ -22,16 +24,36 @@ test("rejects an empty configured gateway host", () => {
   );
 });
 
+test("requires a local API key when creating the gateway", () => {
+  assert.throws(() => createGatewayServer(), /A local API key is required/);
+});
+
+test("rejects missing and invalid local API keys", async () => {
+  const server = createTestGateway();
+
+  await withServer(server, async (baseUrl) => {
+    const missingResponse = await fetch(`${baseUrl}/v1/models`);
+    const missingBody = await missingResponse.json();
+    const invalidResponse = await fetch(`${baseUrl}/v1/models`, {
+      headers: {Authorization: "Bearer ar_local_wrong-key"}
+    });
+
+    assert.equal(missingResponse.status, 401);
+    assert.equal(missingResponse.headers.get("www-authenticate"), 'Bearer realm="autorouter"');
+    assert.equal(missingBody.error.type, "authentication_error");
+    assert.equal(missingBody.error.code, "invalid_api_key");
+    assert.equal(invalidResponse.status, 401);
+  });
+});
+
 test("lists configured models with the OpenAI model schema", async () => {
-  const server = createGatewayServer({
+  const server = createTestGateway({
     models: [{id: "vendor:model-a", provider: "vendor"}],
     now: () => 1_700_000_000_000
   });
 
   await withServer(server, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/v1/models`, {
-      headers: {Authorization: "Bearer local-test-key"}
-    });
+    const response = await gatewayFetch(`${baseUrl}/v1/models`);
 
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type"), /^application\/json/);
@@ -51,7 +73,7 @@ test("lists configured models with the OpenAI model schema", async () => {
 
 test("returns a buffered OpenAI response object", async () => {
   let receivedRequest;
-  const server = createGatewayServer({
+  const server = createTestGateway({
     handleResponse: async (request, context) => {
       receivedRequest = request;
       assert.equal(context.signal.aborted, false);
@@ -66,7 +88,7 @@ test("returns a buffered OpenAI response object", async () => {
   });
 
   await withServer(server, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/v1/responses`, {
+    const response = await gatewayFetch(`${baseUrl}/v1/responses`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({model: "autorouter", input: "Hello"})
@@ -86,14 +108,14 @@ test("returns a buffered OpenAI response object", async () => {
 });
 
 test("streams typed Responses API server-sent events", async () => {
-  const server = createGatewayServer({
+  const server = createTestGateway({
     handleResponse: async () => ({model: "vendor:model-a", outputText: "Hello"}),
     createId: (prefix) => `${prefix}_stream`,
     now: () => 1_700_000_000_000
   });
 
   await withServer(server, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/v1/responses`, {
+    const response = await gatewayFetch(`${baseUrl}/v1/responses`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({model: "autorouter", input: "Hello", stream: true})
@@ -120,10 +142,10 @@ test("streams typed Responses API server-sent events", async () => {
 });
 
 test("returns OpenAI-shaped validation errors", async () => {
-  const server = createGatewayServer();
+  const server = createTestGateway();
 
   await withServer(server, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/v1/responses`, {
+    const response = await gatewayFetch(`${baseUrl}/v1/responses`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({model: "autorouter"})
@@ -143,10 +165,10 @@ test("returns OpenAI-shaped validation errors", async () => {
 });
 
 test("reports an unavailable response handler without exposing internals", async () => {
-  const server = createGatewayServer();
+  const server = createTestGateway();
 
   await withServer(server, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/v1/responses`, {
+    const response = await gatewayFetch(`${baseUrl}/v1/responses`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({model: "autorouter", input: "Hello"})
@@ -160,14 +182,14 @@ test("reports an unavailable response handler without exposing internals", async
 });
 
 test("hides unexpected response handler errors", async () => {
-  const server = createGatewayServer({
+  const server = createTestGateway({
     handleResponse: async () => {
       throw new Error("private upstream detail");
     }
   });
 
   await withServer(server, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/v1/responses`, {
+    const response = await gatewayFetch(`${baseUrl}/v1/responses`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({model: "autorouter", input: "Hello"})
@@ -179,6 +201,20 @@ test("hides unexpected response handler errors", async () => {
     assert.equal(body.error.message, "Internal server error");
   });
 });
+
+function createTestGateway(options = {}) {
+  return createGatewayServer({localApiKey: TEST_LOCAL_API_KEY, ...options});
+}
+
+function gatewayFetch(url, options = {}) {
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      Authorization: `Bearer ${TEST_LOCAL_API_KEY}`
+    }
+  });
+}
 
 async function withServer(server, run) {
   await new Promise((resolve, reject) => {

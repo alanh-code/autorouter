@@ -1,4 +1,5 @@
 import http from "node:http";
+import {getBearerToken, matchesLocalApiKey} from "./auth.js";
 import {
   createCompletedResponse,
   createModelList,
@@ -9,16 +10,22 @@ import {
 const DEFAULT_MAX_BODY_BYTES = 1_000_000;
 
 export function createGatewayServer({
+  localApiKey,
   models = [],
   handleResponse = unavailableResponseHandler,
   createId,
   now = Date.now,
   maxBodyBytes = DEFAULT_MAX_BODY_BYTES
 } = {}) {
+  if (typeof localApiKey !== "string" || localApiKey.length === 0) {
+    throw new Error("A local API key is required");
+  }
+
   return http.createServer((request, response) => {
     handleGatewayRequest({
       request,
       response,
+      localApiKey,
       models,
       handleResponse,
       createId,
@@ -28,7 +35,17 @@ export function createGatewayServer({
   });
 }
 
-async function handleGatewayRequest({request, response, models, handleResponse, createId, now, maxBodyBytes}) {
+async function handleGatewayRequest({request, response, localApiKey, models, handleResponse, createId, now, maxBodyBytes}) {
+  const bearerToken = getBearerToken(request.headers.authorization);
+
+  if (!matchesLocalApiKey(bearerToken, localApiKey)) {
+    response.setHeader("WWW-Authenticate", 'Bearer realm="autorouter"');
+    return writeError(
+      response,
+      new GatewayHttpError(401, "invalid_api_key", "Invalid API key", null, "authentication_error")
+    );
+  }
+
   const url = new URL(request.url ?? "/", "http://localhost");
 
   if (url.pathname === "/v1/models") {
@@ -154,6 +171,7 @@ function writeError(response, error) {
 
   const statusCode = error instanceof GatewayHttpError ? error.statusCode : 500;
   const code = error instanceof GatewayHttpError ? error.code : "server_error";
+  const type = error instanceof GatewayHttpError ? error.type : "server_error";
   const message = error instanceof GatewayHttpError ? error.message : "Internal server error";
   const param = error instanceof GatewayHttpError ? error.param : null;
 
@@ -165,7 +183,7 @@ function writeError(response, error) {
   writeJson(response, statusCode, {
     error: {
       message,
-      type: code,
+      type,
       param,
       code
     }
@@ -181,10 +199,11 @@ async function unavailableResponseHandler() {
 }
 
 class GatewayHttpError extends Error {
-  constructor(statusCode, code, message, param = null) {
+  constructor(statusCode, code, message, param = null, type = code) {
     super(message);
     this.statusCode = statusCode;
     this.code = code;
+    this.type = type;
     this.param = param;
   }
 }
