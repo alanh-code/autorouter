@@ -15,6 +15,12 @@ export {
   UPSTREAM_GATEWAYS
 } from "./upstream-credentials.js";
 export {
+  defineUpstreamAdapter,
+  UPSTREAM_ADAPTER_METHODS,
+  UPSTREAM_ERROR_KINDS,
+  UpstreamGatewayError
+} from "./upstream-adapter.js";
+export {
   createCompletedResponse,
   createModelList,
   createResponseEvents,
