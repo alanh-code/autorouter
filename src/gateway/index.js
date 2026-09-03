@@ -20,6 +20,7 @@ export {
   UPSTREAM_ERROR_KINDS,
   UpstreamGatewayError
 } from "./upstream-adapter.js";
+export {createOpenRouterAdapter} from "./openrouter-adapter.ts";
 export {
   createCompletedResponse,
   createModelList,
