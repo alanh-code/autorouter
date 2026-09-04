@@ -63,7 +63,7 @@ async function fixture(context: TestContext, options: Parameters<typeof mockAdap
   const mock = mockAdapter(options);
   const server = await createRoutedGateway({
     localApiKey: "local-key", credential: {gateway: "openrouter", apiKey: "upstream-key"},
-    adapter: mock.adapter, cachePath
+    adapter: mock.adapter, cachePath, tracePath: path.join(directory, "traces.jsonl")
   });
   await new Promise<void>((resolve, reject) => {server.once("error", reject); server.listen(0, "127.0.0.1", resolve);});
   context.after(async () => {
@@ -95,6 +95,11 @@ test("runs local HTTP requests through classification, selection and exact execu
   assert.equal(mock.requests[1].max_output_tokens, 512);
   assert.equal(mock.catalogCalls, 1);
   assert.ok(fs.existsSync(cachePath));
+  const trace = JSON.parse(fs.readFileSync(path.join(path.dirname(path.dirname(cachePath)), "traces.jsonl"), "utf8"));
+  assert.equal(trace.decision.upstreamModelId, "vendor/b");
+  assert.equal(trace.actualModel, "vendor/b");
+  assert.equal(trace.usage.totalTokens, 20);
+  assert.equal(trace.usage.cost, null);
 });
 
 const functionTool = {type: "function", name: "read_file", description: "Read a project file",
@@ -212,7 +217,8 @@ test("returns routing evidence and forwards cancellation for text message histor
   assert.equal(result.classification.taskCategory, "coding");
   assert.equal(result.tokenEstimate.method, "utf8_bytes");
   assert.equal(result.tokenEstimate.outputBudget, 1024);
-  assert.equal(result.usage?.totalTokens, 20);
+  assert.ok("usage" in result);
+  assert.equal(result.usage.totalTokens, 20);
   controller.abort();
   assert.equal(mock.signals.length, 2);
   assert.ok(mock.signals.every(signal => signal.aborted));

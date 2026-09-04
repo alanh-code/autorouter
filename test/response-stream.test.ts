@@ -41,7 +41,7 @@ async function fixture(context: TestContext, options: {status?: number; contentT
     return new Response(body, {headers: {"Content-Type": options.contentType ?? "text/event-stream"}});
   }});
   const server = await createRoutedGateway({localApiKey: "local-key", credential: {gateway: "openrouter", apiKey: "test-key"},
-    adapter, cachePath: path.join(directory, "cache", "benchmarks.json")});
+    adapter, cachePath: path.join(directory, "cache", "benchmarks.json"), tracePath: path.join(directory, "traces.jsonl")});
   await new Promise<void>((resolve, reject) => {server.once("error", reject); server.listen(0, "127.0.0.1", resolve);});
   context.after(async () => {
     server.closeAllConnections();

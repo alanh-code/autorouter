@@ -8,17 +8,19 @@ import {createOpenRouterAdapter} from "./openrouter-adapter.ts";
 import type {OpenRouterModel} from "./openrouter-adapter.ts";
 import {createGatewayServer, GatewayHttpError} from "./server.js";
 import {UpstreamGatewayError} from "./upstream-adapter.js";
+import {getRoutingTracePath, startRoutingTrace} from "./routing-trace.ts";
 
 type Adapter = ReturnType<typeof createOpenRouterAdapter>;
 type Request = Record<string, unknown>;
 
 export async function createRoutedGateway({
-  localApiKey, credential, adapter = createOpenRouterAdapter(), cachePath = getBenchmarkCachePath()
+  localApiKey, credential, adapter = createOpenRouterAdapter(), cachePath = getBenchmarkCachePath(), tracePath = getRoutingTracePath()
 }: {
   localApiKey: string;
   credential: {gateway: string; apiKey: string};
   adapter?: Adapter;
   cachePath?: string;
+  tracePath?: string;
 }): Promise<Server> {
   if (credential.gateway !== "openrouter") {
     throw new Error("Request execution currently requires the OpenRouter upstream");
@@ -33,7 +35,7 @@ export async function createRoutedGateway({
       adapter: {listModels: async () => catalog}, apiKey: credential.apiKey, filePath: cachePath
     });
   }
-  const handleResponse = createRoutedResponseHandler({catalog, benchmarks, adapter, apiKey: credential.apiKey});
+  const handleResponse = createRoutedResponseHandler({catalog, benchmarks, adapter, apiKey: credential.apiKey, tracePath});
   // The existing JavaScript server's default handler has no declared parameters.
   const createServer = createGatewayServer as unknown as (options: {
     localApiKey: string; models: {id: string; provider: string}[]; handleResponse: typeof handleResponse;
@@ -41,11 +43,12 @@ export async function createRoutedGateway({
   return createServer({localApiKey, models: [{id: "autorouter", provider: "autorouter"}], handleResponse});
 }
 
-export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKey}: {
+export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKey, tracePath}: {
   catalog: readonly OpenRouterModel[];
   benchmarks: BenchmarkSnapshot;
   adapter: Adapter;
   apiKey: string;
+  tracePath?: string;
 }) {
   const inventory = createCanonicalInventory(catalog.filter((model) =>
     model.provider !== "openrouter" && model.id.includes("/")
@@ -67,12 +70,13 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
   })));
 
   return async (request: Request, context: {signal?: AbortSignal} = {}) => {
-    validateRequest(request);
-    const maxOutputTokens = request.max_output_tokens as number | undefined ?? 1024;
-    // UTF-8 bytes are a conservative text budget, not a measured tokenizer count.
-    const estimatedInputTokens = Buffer.byteLength(JSON.stringify({input: request.input, instructions: request.instructions, tools: request.tools}), "utf8");
-    const signal = AbortSignal.any([AbortSignal.timeout(120_000), ...(context.signal ? [context.signal] : [])]);
+    const trace = startRoutingTrace(tracePath);
     try {
+      validateRequest(request);
+      const maxOutputTokens = request.max_output_tokens as number | undefined ?? 1024;
+      // UTF-8 bytes are a conservative text budget, not a measured tokenizer count.
+      const estimatedInputTokens = Buffer.byteLength(JSON.stringify({input: request.input, instructions: request.instructions, tools: request.tools}), "utf8");
+      const signal = AbortSignal.any([AbortSignal.timeout(120_000), ...(context.signal ? [context.signal] : [])]);
       const detected = await classifyRequest({adapter, apiKey, request, signal});
       // Explicit protocol requirements must not depend on the classifier's guess.
       const classification = {...detected, requiredCapabilities: {...detected.requiredCapabilities,
@@ -86,12 +90,13 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
         upstream: "openrouter", estimatedInputTokens, estimatedOutputTokens: maxOutputTokens,
         streaming: request.stream === true
       }});
+      trace.select(decision);
       const translated = adapter.translateRequest({
         request: {...request, max_output_tokens: maxOutputTokens}, modelId: decision.upstreamModelId
       });
       if (request.stream === true) {
         const stream = await adapter.streamResponse({headers: adapter.createAuthHeaders({apiKey}), request: translated, signal});
-        return {stream, classification, decision,
+        return {stream: trace.stream(stream, signal), classification, decision,
           tokenEstimate: {method: "utf8_bytes", input: estimatedInputTokens, outputBudget: maxOutputTokens}};
       }
       const response = await adapter.createResponse({headers: adapter.createAuthHeaders({apiKey}), request: translated, signal});
@@ -99,12 +104,15 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
         || !["completed", "incomplete", "failed"].includes(String(response.status))) {
         throw new GatewayHttpError(502, "upstream_response_invalid", "Upstream returned an unsupported response");
       }
-      return {
+      trace.observe(response);
+      const result = {
         response, classification, decision,
         usage: adapter.normalizeUsage(response.usage),
         execution: adapter.extractExecutionMetadata({response}),
         tokenEstimate: {method: "utf8_bytes", input: estimatedInputTokens, outputBudget: maxOutputTokens}
       };
+      trace.finish();
+      return result;
     } catch (error) {
       if (error instanceof UpstreamGatewayError) {
         const status = Number(error.statusCode) >= 400 && Number(error.statusCode) <= 599
@@ -112,8 +120,10 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
         const type = error.kind === "invalid_request" ? "invalid_request_error"
           : error.kind === "authentication" ? "authentication_error"
           : error.kind === "rate_limit" ? "rate_limit_error" : "server_error";
+        trace.finish(`http_${status}`);
         throw new GatewayHttpError(status, "upstream_error", "Upstream request failed", null, type);
       }
+      trace.finish(error instanceof GatewayHttpError ? `http_${error.statusCode}` : "request_failed");
       throw error;
     }
   };
