@@ -56,7 +56,7 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
     id: model.id.replace("/", ":"), label: model.name,
     capabilities: {
       inputModalities: model.inputModalities, outputModalities: model.outputModalities,
-      toolCalls: model.supportedParameters.includes("tools"), streaming: false
+      toolCalls: model.supportedParameters.includes("tools"), streaming: true
     },
     pricing: model.promptPricePerToken === null || model.completionPricePerToken === null ? null : {
       inputPerMillion: model.promptPricePerToken * 1_000_000,
@@ -77,15 +77,21 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
       if (classification.requiredCapabilities.toolCalls
         || classification.requiredCapabilities.inputModalities.some((value) => value !== "text")
         || classification.requiredCapabilities.outputModalities.some((value) => value !== "text")) {
-        reject("This request requires capabilities beyond buffered text execution");
+        reject("This request requires capabilities beyond text execution");
       }
       const decision = selectModelDeterministically({inventory, benchmarks, requirements: {
         classification,
-        upstream: "openrouter", estimatedInputTokens, estimatedOutputTokens: maxOutputTokens
+        upstream: "openrouter", estimatedInputTokens, estimatedOutputTokens: maxOutputTokens,
+        streaming: request.stream === true
       }});
       const translated = adapter.translateRequest({
         request: {...request, max_output_tokens: maxOutputTokens}, modelId: decision.upstreamModelId
       });
+      if (request.stream === true) {
+        const stream = await adapter.streamResponse({headers: adapter.createAuthHeaders({apiKey}), request: translated, signal});
+        return {stream, classification, decision,
+          tokenEstimate: {method: "utf8_bytes", input: estimatedInputTokens, outputBudget: maxOutputTokens}};
+      }
       const response = await adapter.createResponse({headers: adapter.createAuthHeaders({apiKey}), request: translated, signal});
       if (response.object !== "response" || !Array.isArray(response.output)
         || !["completed", "incomplete"].includes(String(response.status))) {
@@ -109,7 +115,7 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
 
 function validateRequest(request: Request): void {
   if (request.model !== "autorouter") reject("Use the autorouter model");
-  if (request.stream !== undefined && request.stream !== false) reject("Streaming is not supported yet");
+  if (request.stream !== undefined && typeof request.stream !== "boolean") reject("stream must be a boolean");
   if (request.tools !== undefined && (!Array.isArray(request.tools) || request.tools.length > 0)) reject("Tool calls are not supported yet");
   if (request.previous_response_id != null) reject("Send complete message history; previous_response_id is not supported yet");
   if (request.instructions !== undefined && typeof request.instructions !== "string") reject("instructions must be text");

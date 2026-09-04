@@ -116,7 +116,7 @@ export function createOpenRouterAdapter({
     }): UnknownRecord {
       const request = requireRecord(value, "OpenRouter request must be an object");
       const exactModelId = normalizeRequiredString(modelId, "OpenRouter model id");
-      const translated: UnknownRecord = {...request, model: exactModelId, stream: false};
+      const translated: UnknownRecord = {...request, model: exactModelId, stream: request.stream === true};
       delete translated.models;
       delete translated.route;
       return translated;
@@ -146,8 +146,21 @@ export function createOpenRouterAdapter({
       return payload;
     },
 
-    async streamResponse(): Promise<never> {
-      throw new Error("OpenRouter streaming is not implemented");
+    async streamResponse({headers, request: requestBody, signal}: {
+      headers: HeadersInit;
+      request: unknown;
+      signal?: AbortSignal;
+    }): Promise<AsyncIterable<Uint8Array>> {
+      const translated = requireRecord(requestBody, "OpenRouter request must be an object");
+      normalizeRequiredString(translated.model, "OpenRouter model id");
+      const response = await request(`${baseUrl}/responses`, {
+        method: "POST", headers, body: JSON.stringify({...translated, stream: true}), signal
+      });
+      if (!response.body || !response.headers.get("content-type")?.toLowerCase().startsWith("text/event-stream")) {
+        await response.body?.cancel();
+        throw new TypedUpstreamGatewayError("OpenRouter returned an invalid event stream");
+      }
+      return readResponseStream(response.body, signal);
     },
 
     normalizeUsage(value: unknown): NormalizedUsage {
@@ -233,6 +246,24 @@ export function createOpenRouterAdapter({
   }
 
   return defineUpstreamAdapter(adapter);
+}
+
+async function* readResponseStream(body: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<Uint8Array> {
+  const reader = body.getReader();
+  const cancel = () => {void reader.cancel().catch(() => {});};
+  signal?.addEventListener("abort", cancel, {once: true});
+  try {
+    while (true) {
+      signal?.throwIfAborted();
+      const {done, value} = await reader.read();
+      signal?.throwIfAborted();
+      if (done) return;
+      yield value;
+    }
+  } finally {
+    signal?.removeEventListener("abort", cancel);
+    try {await reader.cancel();} finally {reader.releaseLock();}
+  }
 }
 
 function normalizeModel(value: unknown): OpenRouterModel {

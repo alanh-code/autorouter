@@ -1,4 +1,5 @@
 import http from "node:http";
+import {writeResponseStream} from "./response-stream.ts";
 import {getBearerToken, matchesLocalApiKey} from "./auth.js";
 import {
   createCompletedResponse,
@@ -71,7 +72,12 @@ async function handleCreateResponse({request, response, handleResponse, createId
   const body = await readJsonBody(request, maxBodyBytes);
   validateResponseRequest(body);
   const createdAt = toUnixTimestamp(now());
-  const result = await handleResponse(body, {signal: createRequestSignal(request, response)});
+  const signal = createRequestSignal(request, response);
+  const result = await handleResponse(body, {signal});
+
+  if (body.stream === true && result?.stream) {
+    return writeResponseStream(response, result.stream, signal);
+  }
 
   if (result?.response && body.stream !== true) {
     return writeJson(response, 200, result.response);
@@ -169,7 +175,7 @@ function writeMethodNotAllowed(response, allowedMethod) {
 }
 
 function writeError(response, error) {
-  if (response.writableEnded) {
+  if (response.writableEnded || response.destroyed) {
     return;
   }
 

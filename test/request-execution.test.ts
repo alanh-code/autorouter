@@ -104,7 +104,7 @@ test("preserves incomplete upstream responses instead of reporting success", asy
 test("rejects unsupported request features before upstream inference", async context => {
   const {send, mock} = await fixture(context);
   for (const body of [
-    {stream: true}, {tools: [{type: "function"}]}, {previous_response_id: "resp_old"},
+    {stream: "true"}, {tools: [{type: "function"}]}, {previous_response_id: "resp_old"},
     {input: [{role: "user", content: [{type: "input_image", image_url: "image"}]}]},
     {max_output_tokens: -1}, {model: "other"}
   ]) assert.equal((await send(body)).status, 400);
@@ -142,7 +142,7 @@ test("returns routing evidence and forwards cancellation for text message histor
   assert.equal(result.classification.taskCategory, "coding");
   assert.equal(result.tokenEstimate.method, "utf8_bytes");
   assert.equal(result.tokenEstimate.outputBudget, 1024);
-  assert.equal(result.usage.totalTokens, 20);
+  assert.equal(result.usage?.totalTokens, 20);
   controller.abort();
   assert.equal(mock.signals.length, 2);
   assert.ok(mock.signals.every(signal => signal.aborted));
