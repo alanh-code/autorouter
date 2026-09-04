@@ -9,4 +9,7 @@ test("default startup and packaged entrypoint use the gateway", () => {
   assert.equal(manifest.bin["autorouter-gateway"], "./bin/gateway");
   assert.ok(manifest.files.includes("bin/gateway"));
   assert.ok(fs.existsSync(new URL("../bin/gateway", import.meta.url)));
+  assert.deepEqual(Object.keys(manifest.bin), ["autorouter-gateway"]);
+  assert.equal(manifest.dependencies, undefined);
+  assert.ok(!manifest.files.includes("autorouter.config.json"));
 });

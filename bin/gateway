@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import {loadLocalEnv} from "../src/config.js";
+import {loadLocalEnv} from "../src/gateway/environment.ts";
 import {createRoutedGateway} from "../src/gateway/request-execution.ts";
 import {
   configureUpstreamCredential,

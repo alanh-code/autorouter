@@ -31,7 +31,7 @@ unset AUTOROUTER_UPSTREAM_API_KEY
 
 Configuration validates the credential and model catalog, then saves the key in `~/.autorouter/upstream.json` with user-only permissions. This check does not prove that every model is available to your account.
 
-You do not need to copy `.env.example`, configure individual provider keys, or edit `autorouter.config.json` for the gateway.
+You do not need to configure individual provider keys. Alternatively, copy `.env.example` to `.env.local`, fill in the upstream key, and run the configuration command above.
 
 ## Start the gateway
 
@@ -157,5 +157,3 @@ npm run check
 ```
 
 Tests cover routing, authentication, streaming, tool-result round trips, and trace persistence using a simulated upstream. They do not certify compatibility with a live coding client.
-
-Legacy terminal code remains in the repository but is not part of this gateway setup.
