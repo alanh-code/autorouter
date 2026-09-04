@@ -3,6 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import {randomUUID} from "node:crypto";
 import type {RoutingDecision} from "../core/request-routing-policy.ts";
+import type {ClassifierTrace} from "../core/request-classifier.ts";
 
 export const ROUTING_POLICY_VERSION = "benchmark-first-v1";
 export const getRoutingTracePath = () => path.join(os.homedir(), ".autorouter", "traces.jsonl");
@@ -18,6 +19,7 @@ export function startRoutingTrace(filePath?: string) {
   const data = {
     requestId: randomUUID(), startedAt: new Date().toISOString(), policyVersion: ROUTING_POLICY_VERSION,
     decision: null as RoutingDecision | null,
+    classifier: null as ClassifierTrace | null,
     upstreamRequestId: null as string | null, actualModel: null as string | null,
     usage: null as RecordValue | null, status: "unknown", error: null as string | null,
     latencyMs: 0
@@ -93,5 +95,6 @@ export function startRoutingTrace(filePath?: string) {
       finish();
     }
   }
-  return {select(decision: RoutingDecision) {data.decision = decision;}, observe, finish, stream};
+  return {classify(value: ClassifierTrace) {data.classifier = value;},
+    select(decision: RoutingDecision) {data.decision = decision;}, observe, finish, stream};
 }

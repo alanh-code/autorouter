@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type {ClassifierTrace} from "../src/core/request-classifier.ts";
 import {
   classifyRequest,
   REQUEST_CLASSIFIER_MODEL
@@ -44,6 +45,10 @@ test("classifies a request with the pinned model and structured output", async (
   assert.equal(translations[0].modelId, REQUEST_CLASSIFIER_MODEL);
   const classifierRequest = translations[0].request as Record<string, unknown>;
   assert.match(String(classifierRequest.input), /Fix the parser/);
+  const instructions = String(classifierRequest.instructions);
+  assert.match(instructions, /coding: Generate, modify, debug, review, or explain code/);
+  assert.match(instructions, /prefer the specialized requested outcome over coding, then coding over agentic or general_reasoning/);
+  assert.match(instructions, /Ensure the reason supports the selected category/);
   assert.deepEqual(
     (classifierRequest.text as {format: {type: string}}).format.type,
     "json_schema"
@@ -134,3 +139,86 @@ function createAdapter(response: unknown) {
     }
   };
 }
+
+const traceOutput = JSON.stringify({taskCategory: "coding", requiredCapabilities: {
+  inputModalities: ["text"], outputModalities: ["text"], toolCalls: false
+}, confidence: 0.9, reason: "private explanation"});
+
+test("classifier traces omit content by default and include actual usage", async () => {
+  const traces: ClassifierTrace[] = [];
+  await classifyRequest({adapter: createAdapter({id: "resp_1", model: "vendor/actual", output_text: traceOutput,
+    usage: {input_tokens: 10, output_tokens: 20, cost: 0.001}}), apiKey: "private-key",
+    request: {input: "private prompt"}, onTrace: trace => traces.push(trace)});
+  assert.equal(traces.length, 1);
+  assert.equal(traces[0].classification?.taskCategory, "coding");
+  assert.equal(traces[0].classification?.confidence, 0.9);
+  assert.equal(traces[0].actualModel, "vendor/actual");
+  assert.equal(traces[0].usage.cost, 0.001);
+  assert.equal(traces[0].promptVersion, "v2");
+  assert.doesNotMatch(JSON.stringify(traces), /private/);
+});
+
+test("explicit diagnostic capture retains sent instructions and parsed explanation", async () => {
+  const traces: ClassifierTrace[] = [];
+  await classifyRequest({adapter: createAdapter({output_text: traceOutput}), apiKey: "private-key",
+    request: {input: "neutral test"}, captureContent: true, onTrace: trace => traces.push(trace)});
+  assert.match(JSON.stringify(traces[0].request), /Classify the supplied API request|neutral test/);
+  assert.equal(traces[0].outputText, traceOutput);
+  assert.equal(traces[0].classification?.reason, "private explanation");
+  assert.doesNotMatch(JSON.stringify(traces), /private-key/);
+});
+
+test("invalid classifier output is traceable without downstream execution", async () => {
+  const traces: ClassifierTrace[] = [];
+  await assert.rejects(classifyRequest({adapter: createAdapter({output_text: "invalid json"}),
+    apiKey: "test-key", request: {input: "neutral test"}, captureContent: true, onTrace: trace => traces.push(trace)}));
+  assert.equal(traces.length, 1);
+  assert.equal(traces[0].status, "failed");
+  assert.equal(traces[0].error, "invalid_classification");
+  assert.equal(traces[0].outputText, "invalid json");
+  assert.equal(traces[0].usage.cost, null);
+});
+
+test("captures explicit truncation and reasoning usage even when output is absent", async () => {
+  let trace: ClassifierTrace | undefined;
+  await assert.rejects(classifyRequest({adapter: createAdapter({status: "incomplete",
+    incomplete_details: {reason: "max_output_tokens"}, output: [],
+    usage: {output_tokens: 300, output_tokens_details: {reasoning_tokens: 300}}}),
+    apiKey: "test-key", request: {input: "test"}, captureContent: true, onTrace: value => {trace = value;}}));
+  assert.equal(trace?.upstreamStatus, "incomplete");
+  assert.equal(trace?.incompleteReason, "max_output_tokens");
+  assert.equal(trace?.usage.reasoningTokens, 300);
+  assert.equal(trace?.outputText, null);
+  assert.equal(trace?.error, "missing_output_text");
+});
+
+test("preserves partial JSON in diagnostic capture without inferring truncation", async () => {
+  let trace: ClassifierTrace | undefined;
+  await assert.rejects(classifyRequest({adapter: createAdapter({output_text: '{"taskCategory":',
+    usage: {output_tokens: 300}}), apiKey: "test-key", request: {}, captureContent: true,
+    onTrace: value => {trace = value;}}));
+  assert.equal(trace?.outputText, '{"taskCategory":');
+  assert.equal(trace?.incompleteReason, null);
+  assert.equal(trace?.usage.reasoningTokens, null);
+  assert.equal(trace?.error, "invalid_classification");
+});
+
+test("upstream exceptions have a distinct stage without retaining private error text", async () => {
+  let trace: ClassifierTrace | undefined;
+  const adapter = {...createAdapter({}), async createResponse() {throw new Error("private credential");}};
+  await assert.rejects(classifyRequest({adapter, apiKey: "test-key", request: {},
+    onTrace: value => {trace = value;}}));
+  assert.equal(trace?.error, "upstream_call_failed");
+  assert.equal(trace?.upstreamStatus, null);
+  assert.doesNotMatch(JSON.stringify(trace), /private credential/);
+});
+
+test("unrecognized upstream status strings do not leak into default traces", async () => {
+  let trace: ClassifierTrace | undefined;
+  await classifyRequest({adapter: createAdapter({output_text: traceOutput, status: "private text",
+    incomplete_details: {reason: "private text"}}), apiKey: "test-key", request: {},
+    onTrace: value => {trace = value;}});
+  assert.equal(trace?.upstreamStatus, "unknown");
+  assert.equal(trace?.incompleteReason, "unknown");
+  assert.doesNotMatch(JSON.stringify(trace), /private text/);
+});

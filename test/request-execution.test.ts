@@ -100,6 +100,8 @@ test("runs local HTTP requests through classification, selection and exact execu
   assert.equal(trace.actualModel, "vendor/b");
   assert.equal(trace.usage.totalTokens, 20);
   assert.equal(trace.usage.cost, null);
+  assert.equal(trace.classifier.classification.taskCategory, "coding");
+  assert.equal(trace.classifier.classification.reason, undefined);
 });
 
 const functionTool = {type: "function", name: "read_file", description: "Read a project file",

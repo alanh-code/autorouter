@@ -77,7 +77,7 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
       // UTF-8 bytes are a conservative text budget, not a measured tokenizer count.
       const estimatedInputTokens = Buffer.byteLength(JSON.stringify({input: request.input, instructions: request.instructions, tools: request.tools}), "utf8");
       const signal = AbortSignal.any([AbortSignal.timeout(120_000), ...(context.signal ? [context.signal] : [])]);
-      const detected = await classifyRequest({adapter, apiKey, request, signal});
+      const detected = await classifyRequest({adapter, apiKey, request, signal, onTrace: trace.classify});
       // Explicit protocol requirements must not depend on the classifier's guess.
       const classification = {...detected, requiredCapabilities: {...detected.requiredCapabilities,
         toolCalls: detected.requiredCapabilities.toolCalls || hasToolContext(request)}};
