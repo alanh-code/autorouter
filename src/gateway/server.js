@@ -73,6 +73,10 @@ async function handleCreateResponse({request, response, handleResponse, createId
   const createdAt = toUnixTimestamp(now());
   const result = await handleResponse(body, {signal: createRequestSignal(request, response)});
 
+  if (result?.response && body.stream !== true) {
+    return writeJson(response, 200, result.response);
+  }
+
   if (!result || typeof result.outputText !== "string") {
     throw new GatewayHttpError(500, "server_error", "Response handler returned invalid output");
   }
@@ -198,7 +202,7 @@ async function unavailableResponseHandler() {
   throw new GatewayHttpError(503, "gateway_not_ready", "No response handler is configured");
 }
 
-class GatewayHttpError extends Error {
+export class GatewayHttpError extends Error {
   constructor(statusCode, code, message, param = null, type = code) {
     super(message);
     this.statusCode = statusCode;

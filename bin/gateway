@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import {loadConfig, loadLocalEnv} from "../src/config.js";
+import {loadLocalEnv} from "../src/config.js";
+import {createRoutedGateway} from "../src/gateway/request-execution.ts";
 import {
   configureUpstreamCredential,
-  createGatewayServer,
+  loadUpstreamCredential,
   loadOrCreateLocalApiKey,
   resolveGatewayHost,
   rotateLocalApiKey
@@ -20,7 +21,7 @@ if (command === "key") {
 } else if (command === "configure-upstream") {
   await configureUpstream(process.argv[3]);
 } else if (command === undefined) {
-  startGateway();
+  await startGateway();
 } else {
   throw new Error(`Unknown gateway command: ${command}`);
 }
@@ -33,13 +34,11 @@ async function configureUpstream(gateway) {
   console.log(`Configured ${result.gateway} with ${result.modelCount} available models.`);
 }
 
-function startGateway() {
-  const config = loadConfig();
-  const models = Array.isArray(config.baseModels) ? config.baseModels : [];
+async function startGateway() {
   const host = resolveGatewayHost(process.env.AUTOROUTER_HOST);
   const localApiKey = loadOrCreateLocalApiKey();
   const port = parsePort(process.env.AUTOROUTER_PORT);
-  const server = createGatewayServer({localApiKey, models});
+  const server = await createRoutedGateway({localApiKey, credential: loadUpstreamCredential()});
 
   server.listen(port, host, () => {
     console.log(`AutoRouter gateway listening on http://${host}:${port}`);
