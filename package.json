@@ -1,7 +1,7 @@
 {
   "name": "autorouter",
   "version": "0.1.0",
-  "description": "Interactive CLI agent that routes task stages across configured models.",
+  "description": "Local request-routing gateway with inspectable model selection.",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -15,6 +15,7 @@
   "homepage": "https://github.com/alanh-code/autorouter#readme",
   "files": [
     "bin/auto",
+    "bin/gateway",
     "src",
     "autorouter.config.json",
     ".env.example",
@@ -26,7 +27,7 @@
     "autorouter-gateway": "./bin/gateway"
   },
   "scripts": {
-    "start": "node ./bin/auto",
+    "start": "node ./bin/gateway",
     "gateway": "node ./bin/gateway",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && node --check ./bin/auto && node --check ./bin/gateway && node --check ./src/config.js && node --check ./src/constants.js && node --check ./src/core/index.js && node --check ./src/core/costs.js && node --check ./src/core/inventory.js && node --check ./src/core/model-id.js && node --check ./src/core/routing.js && node --check ./src/gateway/auth.js && node --check ./src/gateway/index.js && node --check ./src/gateway/network.js && node --check ./src/gateway/protocol.js && node --check ./src/gateway/server.js && node --check ./src/gateway/upstream-adapter.js && node --check ./src/gateway/upstream-credentials.js && node --check ./src/providers/chat.js && node --check ./src/providers/inventory.js && node --check ./src/utils/runtime.js && node --check ./src/utils/text.js && node --check ./src/legacy/terminal/index.js && node --check ./src/legacy/terminal/app.js && node --check ./src/legacy/terminal/execution.js && node --check ./src/legacy/terminal/router/analysis.js && node --check ./src/legacy/terminal/tools/exa.js && node --check ./src/legacy/terminal/tools/local-files.js && node --check ./src/legacy/terminal/voice/audio.js && node --check ./src/legacy/terminal/voice/queue.js && node --check ./src/legacy/terminal/voice/recorder.js && node --check ./src/legacy/terminal/voice/transcription.js && npm test",

@@ -1,304 +1,161 @@
-# Autorouter
+# AutoRouter
 
-An interactive terminal agent that routes one task across multiple models and tools.
+A local request-routing gateway with inspectable model selection.
 
-Most CLI agents are designed around one model for the whole task. That design limits flexibility and cost control. Real tasks often split into smaller pieces: planning, current data lookup, code inspection, file edits, review, and final synthesis. Those pieces do not always need the same model.
+AutoRouter classifies a request, selects a model using available benchmark data, and calls that model through OpenRouter. Your client receives the response; a local trace records the decision and execution metadata.
 
-Autorouter lets a base model analyze your prompt, break it into execution stages, choose from your configured model inventory, ask for approval, run the stages, and return one final answer with a cost review.
+OpenRouter is the only supported upstream for the current gateway. You need one OpenRouter key, not a separate key for each model provider. AutoRouter does not execute tools or edit files: those remain the client's responsibility.
 
-## Quick Start
+## Install from source
 
-### Prerequisites
-
-1. Node.js 20 or newer.
-2. npm.
-3. At least one model provider API key for real routing.
-
-### Install and Run
+Requirements: Node.js 22.18 or newer, npm, and an OpenRouter key with access and credits for the models being called. The repository is not published as an npm package.
 
 ```bash
-npm install
-npm start
+git clone https://github.com/alanh-code/autorouter.git
+cd autorouter
+npm ci
 ```
 
-Or install the local `auto` command:
+The gateway runs TypeScript directly through Node.js. No build step is required.
+
+## Configure the upstream key
+
+In Bash or Zsh, run these commands. After `read`, paste your **OpenRouter key** and press Enter. Input is hidden. Do not put the key directly in a shell command or commit it.
 
 ```bash
-npm link
-auto
-```
-
-Run the local gateway:
-
-```bash
-npm run gateway
-```
-
-The gateway listens on `127.0.0.1:8787` by default. Set `AUTOROUTER_HOST` only when you intentionally want to expose it on another network interface.
-
-View the generated local API key or rotate it:
-
-```bash
-npm run gateway -- key
-npm run gateway -- rotate-key
-```
-
-Send this local key as a Bearer token to the gateway. The key is stored in `~/.autorouter/local-api-key` with user-only file permissions. Rotating it replaces the stored key; restart the gateway to apply it.
-
-Configure one upstream gateway credential:
-
-```bash
-read -s AUTOROUTER_UPSTREAM_API_KEY
+read -r -s AUTOROUTER_UPSTREAM_API_KEY
 export AUTOROUTER_UPSTREAM_API_KEY
 npm run gateway -- configure-upstream openrouter
 unset AUTOROUTER_UPSTREAM_API_KEY
 ```
 
-Use `ramp-router` instead of `openrouter` to select Ramp Router. Autorouter validates the key and its available model catalog, then stores the selected gateway and credential in `~/.autorouter/upstream.json` with user-only file permissions. Configuring another gateway replaces the previous credential.
+Configuration validates the credential and model catalog, then saves the key in `~/.autorouter/upstream.json` with user-only permissions. This check does not prove that every model is available to your account.
 
-Create a default config file if needed:
+You do not need to copy `.env.example`, configure individual provider keys, or edit `autorouter.config.json` for the gateway.
 
-```bash
-node ./bin/auto init
-```
-
-## Add API Keys
-
-Create `.env.local` from the example:
-
-```bash
-cp .env.example .env.local
-```
-
-Add only the keys you want to use:
-
-```bash
-# .env.local
-
-# Model providers:
-DEEPSEEK_API_KEY=
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-KIMI_API_KEY=
-
-# Voice transcription:
-GROQ_API_KEY=
-
-# Tool providers:
-EXA_API_KEY=
-```
-
-Every key is optional, but Autorouter only considers providers whose keys are configured. For example, if only `KIMI_API_KEY` and `EXA_API_KEY` are set, the base model picker and execution planner will only use Kimi models plus Exa web search.
-
-`.env.local` is ignored by Git and should never be committed.
-
-## What You Get With Keys
-
-### With One Model Provider Key
-
-Autorouter can launch, choose a base model, plan stages, execute model only stages, and produce a cost review when pricing is configured.
-
-Example:
-
-```text
-explain the difference between agent routing and model selection
-```
-
-### With Exa
-
-Autorouter can search current sources for questions that should not rely on model memory.
-
-Example:
-
-```text
-summarize the latest Node.js LTS release notes
-```
-
-### With Local Workspace Access
-
-Autorouter can inspect the current working directory, read files, create files, and edit files inside the project.
-
-Example:
-
-```text
-inspect package.json and explain the available scripts
-```
-
-## Core Features
-
-### Model Picker
-
-Use `/model` to choose the base planning model. The picker only shows models from providers that are configured and available in the current environment.
-
-### Stage Routing
-
-The base model decides whether to clarify, fail, or split the task into stages. Each stage can use a different configured model or tool. Autorouter rejects invented model IDs.
-
-### Approval Flow
-
-Before execution, Autorouter shows the planned route and asks for approval.
-
-Approval options:
-
-1. Yes.
-2. Yes, and accept all execution for this session.
-3. No, and tell Autorouter what to do instead.
-
-### Voice Input
-
-Use `/voice` to choose a dictation mode. Voice input uses Groq's `whisper-large-v3-turbo` with `GROQ_API_KEY` and inserts editable text into the prompt. It never submits the prompt automatically.
-
-1. Off disables microphone input and is the default on every launch.
-2. Press Tab and talk starts one recording when Tab is pressed. Two seconds of silence ends and transcribes it.
-3. Speak freely listens while the main prompt editor is open, detects utterances, and appends each transcription in order.
-
-Press Escape to cancel an active Tab recording. Audio is held in memory while it is recorded and is sent to Groq for transcription. Autorouter does not save recordings to disk.
-
-### Web Search
-
-Exa is used for current information such as recent events, weather, prices, schedules, or other live data. Search results are treated as tool context and then refined by an execution model before the final answer is shown.
-
-### Workspace Tools
-
-Local file tools are scoped to the current working directory.
-
-1. `local_files` reads project files.
-2. `file_write` creates new local files.
-3. `file_edit` edits existing local files.
-
-### Cost Review
-
-After execution, Autorouter shows planning cost, stage cost, final synthesis cost, percentage share, and total cost. Provider token usage is converted into dollar estimates when pricing is configured. Exa search cost is included when available.
-
-### Terminal Experience
-
-1. Type `auto` to launch.
-2. Type `/` to see matching slash commands.
-3. Type `/voice` to choose a voice input mode.
-4. In Press Tab and talk mode, press Tab to begin dictation.
-5. Use `Shift+Enter` for multiline prompts.
-6. Use arrow keys to browse prompt history.
-7. Use `Ctrl+C` to clear the input when text is present.
-8. Use `/exit` or `/quit` to close the app.
-
-## How Routing Works
-
-1. The user enters a task in the terminal.
-2. The selected base model receives runtime context, workspace context, and the enabled model inventory.
-3. The base model returns either a clarification question, an error, or a stage plan.
-4. Autorouter validates that every stage uses a configured model and allowed tools.
-5. The user approves execution.
-6. Autorouter runs each stage, passing prior stage results forward.
-7. A final synthesis model returns one user facing answer.
-8. Autorouter prints a cost review.
-
-## Provider Model
-
-Autorouter is not limited to one fixed provider list. A provider needs:
-
-1. An API key supplied by the user.
-2. A provider entry in `autorouter.config.json`.
-3. A runtime adapter that knows how to call that provider.
-
-The example configuration currently includes:
-
-1. DeepSeek.
-2. OpenAI.
-3. Anthropic.
-4. Kimi.
-5. Exa for web search.
-
-Model and tool configuration lives in `autorouter.config.json`. The model inventory includes model IDs, labels, provider names, output caps, and pricing. The base model receives the enabled inventory and must choose exact `modelId` values from it.
-
-Pricing is stored as dollars per 1 million tokens:
-
-```json
-{
-  "inputCacheHitPerMillion": 0.19,
-  "inputCacheMissPerMillion": 0.95,
-  "outputPerMillion": 4
-}
-```
-
-## Repository Architecture
-
-```text
-Autorouter/
-  bin/auto
-    CLI entrypoint.
-
-  bin/gateway
-    Local OpenAI-compatible HTTP gateway entrypoint.
-
-  src/legacy/terminal/
-    Temporary legacy terminal entrypoint, Ink UI, stage execution, voice input, and agent tools.
-
-  src/config.js
-    Config loading, local env loading, and default config creation.
-
-  src/constants.js
-    Shared limits and allowed tool names.
-
-  src/core/
-    Pure model inventory, ID parsing, routing validation, and cost calculation.
-
-  src/gateway/
-    OpenAI-compatible models, responses, error, and streaming protocol handling.
-
-  src/providers/
-    Chat completion adapter and enabled model inventory helpers.
-
-  src/utils/
-    Runtime context and text helpers.
-
-  test/
-    Routing, execution, prompt, and normalization tests.
-
-  autorouter.config.json
-    Model provider, tool provider, model inventory, token cap, and pricing config.
-
-  .env.example
-    Local API key names. Copy this to .env.local.
-```
-
-## Try These Prompts
-
-```text
-explain the difference between agent routing and model selection
-```
-
-```text
-summarize the latest Node.js LTS release notes
-```
-
-```text
-inspect package.json and explain the available scripts
-```
-
-```text
-create docs/setup-checklist.md with a short local setup checklist
-```
-
-```text
-update README.md to mention that Autorouter supports Exa web search
-```
-
-## Development Checks
-
-Run syntax validation and tests:
-
-```bash
-npm run check
-```
-
-Run tests only:
-
-```bash
-npm test
-```
-
-Run the CLI:
+## Start the gateway
 
 ```bash
 npm start
 ```
+
+`npm run gateway` is equivalent. Keep the process running while using your client; Ctrl+C stops it. The default address is `http://127.0.0.1:8787`. To choose another port:
+
+```bash
+AUTOROUTER_PORT=8788 npm start
+```
+
+Keep the default localhost binding. The gateway has no TLS and is not intended for public network exposure.
+
+Startup loads the model catalog. If no benchmark cache exists, it creates `~/.autorouter/benchmarks.json`; subsequent starts reuse that snapshot. There is no automatic benchmark refresh.
+
+## Connect a client
+
+In another terminal, display your **AutoRouter local key**:
+
+```bash
+npm run gateway -- key
+```
+
+This generates the local key if needed. The local key authenticates your client to AutoRouter. The separate OpenRouter key authenticates AutoRouter to the upstream service. Keep both out of screenshots and recordings.
+
+Configure a client that supports a custom base URL and the Responses API:
+
+| Setting | Value |
+| --- | --- |
+| Base URL | `http://127.0.0.1:8787/v1` |
+| API key | AutoRouter local key |
+| Model | `autorouter` |
+| API | Responses, not Chat Completions |
+
+Configuration is manual. Live client compatibility has not yet been verified; automated integration tests simulate the upstream.
+
+### Check local authentication
+
+From the repository directory, capture the local key without printing it, then list models:
+
+```bash
+export AUTOROUTER_LOCAL_API_KEY="$(npm run --silent gateway -- key)"
+node --input-type=module -e '
+const response = await fetch("http://127.0.0.1:8787/v1/models", {
+  headers: {Authorization: `Bearer ${process.env.AUTOROUTER_LOCAL_API_KEY}`}
+});
+console.log(response.status, await response.json());
+'
+```
+
+Expect HTTP 200 with the virtual model `autorouter`. This does not perform model inference.
+
+### Send a request
+
+This calls both the classifier and selected model and can incur upstream charges:
+
+```bash
+node --input-type=module -e '
+const response = await fetch("http://127.0.0.1:8787/v1/responses", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.AUTOROUTER_LOCAL_API_KEY}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    model: "autorouter",
+    input: "Write a JavaScript function that adds two numbers.",
+    max_output_tokens: 256,
+    stream: false
+  })
+});
+console.log(response.status, await response.json());
+'
+unset AUTOROUTER_LOCAL_API_KEY
+```
+
+Set `stream: true` in a streaming-capable client to receive SSE. Client disconnection cancels the upstream request; tokens already generated may still be charged.
+
+## Routing and traces
+
+1. A fixed classifier (`deepseek/deepseek-v4-flash-0731`) categorizes the request through OpenRouter.
+2. AutoRouter filters models by published capabilities and context/output limits.
+3. It ranks candidates by task-specific benchmarks where available. Estimated cost breaks score ties. If no eligible model has the relevant benchmark, it uses available pricing. Model ID breaks remaining ties.
+4. The selected model ID is sent explicitly to OpenRouter, which may choose the hosting provider for that model.
+5. A JSONL record is appended to `~/.autorouter/traces.jsonl` when execution ends.
+
+Selection is deterministic for the same classification, catalog, benchmark snapshot, and token estimates. Classification itself can vary. Benchmarks are selection inputs, not proof that a model is best for a request.
+
+Traces include a local request ID, policy version, ranked candidates, selection reason, requested model, reported actual model, upstream response ID, elapsed time, target-model usage/cost, and error state. Missing usage/cost is `null`, not zero. Cost excludes the classifier; elapsed time includes classification and execution.
+
+Prompts, tool arguments/results, generated text, and raw error messages are not saved in traces. There is no automatic trace rotation. A storage failure prints a warning without failing the response.
+
+## Current limits
+
+* Request-level routing only, without task decomposition or automatic fallback.
+* `GET /v1/models` and `POST /v1/responses`; no Chat Completions endpoint.
+* Text input/output and function tools with text results. The client executes tools and returns `function_call_output` with complete history.
+* No `previous_response_id`, multimodal input, hosted tools, or reasoning-item history support.
+* A 1 MB request-body limit and a 120-second classification/execution timeout.
+* Default output budget: 1,024 tokens. Use `max_output_tokens` to change it. Input budgeting uses UTF-8 byte length, not a measured tokenizer count.
+* The classifier and selected model must be accessible through your account. No automatic classifier replacement is implemented.
+
+## Key rotation and troubleshooting
+
+```bash
+npm run gateway -- rotate-key
+```
+
+Rotation prints a new local key. Restart the gateway and update the client afterward. To replace the upstream key, repeat its configuration step and restart.
+
+* Missing `upstream.json`: configure the upstream key before starting.
+* Local HTTP 401: check the local key and restart after rotation. Upstream authentication errors instead require checking the OpenRouter key.
+* Unsupported request: use the Responses API, the `autorouter` model, and supported input types.
+* Upstream failure: check account access, credits, and model availability. HTTP errors preserve status codes but omit raw upstream details.
+
+## Development
+
+```bash
+npm test
+npm run check
+```
+
+Tests cover routing, authentication, streaming, tool-result round trips, and trace persistence using a simulated upstream. They do not certify compatibility with a live coding client.
+
+Legacy terminal code remains in the repository but is not part of this gateway setup.
