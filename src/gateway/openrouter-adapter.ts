@@ -28,6 +28,20 @@ export type OpenRouterModel = Readonly<{
   maxOutputTokens: number | null;
   promptPricePerToken: number | null;
   completionPricePerToken: number | null;
+  benchmarks: Readonly<{
+    artificialAnalysis: Readonly<{
+      intelligenceIndex: number | null;
+      codingIndex: number | null;
+      agenticIndex: number | null;
+    }> | null;
+    designArena: readonly Readonly<{
+      arena: string;
+      category: string;
+      elo: number;
+      winRate: number;
+      rank: number;
+    }>[];
+  }>;
 }>;
 
 export type NormalizedUsage = Readonly<{
@@ -227,6 +241,7 @@ function normalizeModel(value: unknown): OpenRouterModel {
   const architecture = optionalRecord(model.architecture);
   const pricing = optionalRecord(model.pricing);
   const topProvider = optionalRecord(model.top_provider);
+  const benchmarks = optionalRecord(model.benchmarks);
   const provider = id.includes("/") ? id.slice(0, id.indexOf("/")) : id;
 
   return Object.freeze({
@@ -238,9 +253,43 @@ function normalizeModel(value: unknown): OpenRouterModel {
     supportedParameters: normalizeStringArray(model.supported_parameters),
     contextTokens: normalizeOptionalPositiveInteger(model.context_length),
     maxOutputTokens: normalizeOptionalPositiveInteger(topProvider?.max_completion_tokens),
-    promptPricePerToken: normalizeOptionalNumber(pricing?.prompt, "OpenRouter prompt price"),
-    completionPricePerToken: normalizeOptionalNumber(pricing?.completion, "OpenRouter completion price")
+    promptPricePerToken: normalizeOptionalPrice(pricing?.prompt, "OpenRouter prompt price"),
+    completionPricePerToken: normalizeOptionalPrice(pricing?.completion, "OpenRouter completion price"),
+    benchmarks: normalizeBenchmarks(benchmarks)
   });
+}
+
+function normalizeBenchmarks(value: UnknownRecord | null): OpenRouterModel["benchmarks"] {
+  const artificialAnalysis = optionalRecord(value?.artificial_analysis);
+  const designArena = Array.isArray(value?.design_arena)
+    ? value.design_arena.flatMap((entry) => {
+      const record = optionalRecord(entry);
+      const arena = normalizeOptionalString(record?.arena);
+      const category = normalizeOptionalString(record?.category);
+      const elo = normalizeBenchmarkNumber(record?.elo);
+      const winRate = normalizeBenchmarkNumber(record?.win_rate);
+      const rank = normalizeBenchmarkNumber(record?.rank);
+
+      return arena && category && elo !== null && winRate !== null && rank !== null
+        ? [{arena, category, elo, winRate, rank}]
+        : [];
+    })
+    : [];
+
+  return Object.freeze({
+    artificialAnalysis: artificialAnalysis
+      ? Object.freeze({
+        intelligenceIndex: normalizeBenchmarkNumber(artificialAnalysis.intelligence_index),
+        codingIndex: normalizeBenchmarkNumber(artificialAnalysis.coding_index),
+        agenticIndex: normalizeBenchmarkNumber(artificialAnalysis.agentic_index)
+      })
+      : null,
+    designArena: Object.freeze(designArena.map((entry) => Object.freeze(entry)))
+  });
+}
+
+function normalizeBenchmarkNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 async function readJson(response: Response): Promise<UnknownRecord> {
@@ -302,6 +351,18 @@ function normalizeOptionalNumber(value: unknown, label: string): number | null {
     throw new Error(`${label} must be a non-negative number`);
   }
   return number;
+}
+
+function normalizeOptionalPrice(value: unknown, label: string): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const number = typeof value === "string" ? Number(value) : value;
+  if (typeof number !== "number" || !Number.isFinite(number)) {
+    throw new Error(`${label} must be a number`);
+  }
+  return number < 0 ? null : number;
 }
 
 function normalizeOptionalPositiveInteger(value: unknown): number | null {

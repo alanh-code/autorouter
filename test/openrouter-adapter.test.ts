@@ -13,6 +13,20 @@ test("discovers and normalizes the authenticated OpenRouter catalog", async () =
         architecture: {input_modalities: ["text"], output_modalities: ["text"]},
         context_length: 128_000,
         pricing: {prompt: "0.000001", completion: "0.000002"},
+        benchmarks: {
+          artificial_analysis: {
+            intelligence_index: 70,
+            coding_index: 65,
+            agentic_index: 60
+          },
+          design_arena: [{
+            arena: "models",
+            category: "website",
+            elo: 1250,
+            win_rate: 54.2,
+            rank: 3
+          }]
+        },
         supported_parameters: ["temperature", "tools"],
         top_provider: {max_completion_tokens: 8_000}
       }]});
@@ -33,7 +47,21 @@ test("discovers and normalizes the authenticated OpenRouter catalog", async () =
     contextTokens: 128_000,
     maxOutputTokens: 8_000,
     promptPricePerToken: 0.000001,
-    completionPricePerToken: 0.000002
+    completionPricePerToken: 0.000002,
+    benchmarks: {
+      artificialAnalysis: {
+        intelligenceIndex: 70,
+        codingIndex: 65,
+        agenticIndex: 60
+      },
+      designArena: [{
+        arena: "models",
+        category: "website",
+        elo: 1250,
+        winRate: 54.2,
+        rank: 3
+      }]
+    }
   }]);
 });
 
@@ -132,4 +160,23 @@ test("rejects malformed OpenRouter catalogs and buffered responses", async () =>
     }),
     /OpenRouter response model is required/
   );
+});
+
+test("keeps benchmark data when a routing model uses unavailable price sentinels", async () => {
+  const adapter = createOpenRouterAdapter({
+    fetchImpl: async () => Response.json({data: [{
+      id: "openrouter/auto",
+      architecture: {input_modalities: ["text"], output_modalities: ["text"]},
+      pricing: {prompt: "-1", completion: "-1"},
+      benchmarks: {
+        artificial_analysis: {intelligence_index: 50}
+      }
+    }]})
+  });
+
+  const [model] = await adapter.listModels({apiKey: "test-key"});
+
+  assert.equal(model.promptPricePerToken, null);
+  assert.equal(model.completionPricePerToken, null);
+  assert.equal(model.benchmarks.artificialAnalysis?.intelligenceIndex, 50);
 });
