@@ -70,12 +70,14 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
     validateRequest(request);
     const maxOutputTokens = request.max_output_tokens as number | undefined ?? 1024;
     // UTF-8 bytes are a conservative text budget, not a measured tokenizer count.
-    const estimatedInputTokens = Buffer.byteLength(JSON.stringify({input: request.input, instructions: request.instructions}), "utf8");
+    const estimatedInputTokens = Buffer.byteLength(JSON.stringify({input: request.input, instructions: request.instructions, tools: request.tools}), "utf8");
     const signal = AbortSignal.any([AbortSignal.timeout(120_000), ...(context.signal ? [context.signal] : [])]);
     try {
-      const classification = await classifyRequest({adapter, apiKey, request, signal});
-      if (classification.requiredCapabilities.toolCalls
-        || classification.requiredCapabilities.inputModalities.some((value) => value !== "text")
+      const detected = await classifyRequest({adapter, apiKey, request, signal});
+      // Explicit protocol requirements must not depend on the classifier's guess.
+      const classification = {...detected, requiredCapabilities: {...detected.requiredCapabilities,
+        toolCalls: detected.requiredCapabilities.toolCalls || hasToolContext(request)}};
+      if (classification.requiredCapabilities.inputModalities.some((value) => value !== "text")
         || classification.requiredCapabilities.outputModalities.some((value) => value !== "text")) {
         reject("This request requires capabilities beyond text execution");
       }
@@ -94,7 +96,7 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
       }
       const response = await adapter.createResponse({headers: adapter.createAuthHeaders({apiKey}), request: translated, signal});
       if (response.object !== "response" || !Array.isArray(response.output)
-        || !["completed", "incomplete"].includes(String(response.status))) {
+        || !["completed", "incomplete", "failed"].includes(String(response.status))) {
         throw new GatewayHttpError(502, "upstream_response_invalid", "Upstream returned an unsupported response");
       }
       return {
@@ -105,8 +107,12 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
       };
     } catch (error) {
       if (error instanceof UpstreamGatewayError) {
-        const status = error.kind === "rate_limit" ? 429 : error.kind === "timeout" ? 504 : 502;
-        throw new GatewayHttpError(status, "upstream_error", "Upstream request failed");
+        const status = Number(error.statusCode) >= 400 && Number(error.statusCode) <= 599
+          ? Number(error.statusCode) : error.kind === "timeout" ? 504 : 502;
+        const type = error.kind === "invalid_request" ? "invalid_request_error"
+          : error.kind === "authentication" ? "authentication_error"
+          : error.kind === "rate_limit" ? "rate_limit_error" : "server_error";
+        throw new GatewayHttpError(status, "upstream_error", "Upstream request failed", null, type);
       }
       throw error;
     }
@@ -116,7 +122,14 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
 function validateRequest(request: Request): void {
   if (request.model !== "autorouter") reject("Use the autorouter model");
   if (request.stream !== undefined && typeof request.stream !== "boolean") reject("stream must be a boolean");
-  if (request.tools !== undefined && (!Array.isArray(request.tools) || request.tools.length > 0)) reject("Tool calls are not supported yet");
+  if (request.tools !== undefined) {
+    if (!Array.isArray(request.tools)) reject("tools must be an array");
+    for (const tool of request.tools as unknown[]) {
+      const value = record(tool);
+      if (value?.type !== "function" || !nonempty(value.name)
+        || (value.parameters != null && !record(value.parameters))) reject("Only valid function tools are supported");
+    }
+  }
   if (request.previous_response_id != null) reject("Send complete message history; previous_response_id is not supported yet");
   if (request.instructions !== undefined && typeof request.instructions !== "string") reject("instructions must be text");
   if (request.max_output_tokens !== undefined && (!Number.isSafeInteger(request.max_output_tokens)
@@ -126,12 +139,34 @@ function validateRequest(request: Request): void {
   for (const item of request.input as unknown[]) {
     if (!item || typeof item !== "object") reject("input must contain text messages");
     const message = item as Request;
+    if (message.type === "function_call") {
+      if (!nonempty(message.call_id) || !nonempty(message.name) || typeof message.arguments !== "string") reject("Invalid function call");
+      continue;
+    }
+    if (message.type === "function_call_output") {
+      if (!nonempty(message.call_id) || typeof message.output !== "string") reject("Function results must contain a call_id and text output");
+      continue;
+    }
     if (!['user', 'assistant', 'system', 'developer'].includes(String(message.role))
       || (message.type !== undefined && message.type !== "message")) reject("Unsupported input message");
     if (typeof message.content === "string") continue;
     if (!Array.isArray(message.content) || message.content.some((part) => !part
       || !["input_text", "output_text"].includes(part.type) || typeof part.text !== "string")) reject("Only text content is supported");
   }
+}
+
+function record(value: unknown): Request | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Request : null;
+}
+
+function nonempty(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasToolContext(request: Request): boolean {
+  return (Array.isArray(request.tools) && request.tools.length > 0)
+    || (Array.isArray(request.input) && request.input.some(item =>
+      ["function_call", "function_call_output"].includes(String(record(item)?.type))));
 }
 
 function reject(message: string): never {

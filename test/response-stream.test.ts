@@ -11,7 +11,7 @@ import {REQUEST_CLASSIFIER_MODEL} from "../src/core/request-classifier.ts";
 const encoder = new TextEncoder();
 const first = ': keepalive\r\n\r\nevent: response.output_text.delta\r\ndata: {"type":"response.output_text.delta","delta":"Hi"}\r\n\r\n';
 
-async function fixture(context: TestContext, options: {status?: number; contentType?: string} = {}) {
+async function fixture(context: TestContext, options: {status?: number; contentType?: string; tools?: unknown[]} = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "router-stream-"));
   const calls: Record<string, unknown>[] = [];
   const signals: AbortSignal[] = [];
@@ -27,7 +27,7 @@ async function fixture(context: TestContext, options: {status?: number; contentT
       id: "vendor/model-a", name: "Model A", context_length: 128_000,
       top_provider: {max_completion_tokens: 4096},
       architecture: {input_modalities: ["text"], output_modalities: ["text"]},
-      pricing: {prompt: "0.000001", completion: "0.000002"}
+      pricing: {prompt: "0.000001", completion: "0.000002"}, supported_parameters: ["tools"]
     }]});
     const request = JSON.parse(String(init?.body));
     calls.push(request);
@@ -52,7 +52,7 @@ async function fixture(context: TestContext, options: {status?: number; contentT
   assert.ok(address && typeof address === "object");
   const response = await fetch(`http://127.0.0.1:${address.port}/v1/responses`, {
     method: "POST", headers: {Authorization: "Bearer local-key", "Content-Type": "application/json"},
-    body: JSON.stringify({model: "autorouter", input: "Write a function", stream: true})
+    body: JSON.stringify({model: "autorouter", input: "Write a function", stream: true, tools: options.tools})
   });
   return {response, controller, calls, signals, cancelled};
 }
@@ -75,6 +75,21 @@ test("forwards SSE incrementally with exact bytes, event order and final usage",
   while (true) {const chunk = await reader.read(); if (chunk.done) break; chunks.push(chunk.value);}
   assert.equal(Buffer.concat(chunks).toString("utf8"), remaining);
   assert.deepEqual(calls.map(call => [call.model, call.stream]), [[REQUEST_CLASSIFIER_MODEL, false], ["vendor/model-a", true]]);
+});
+
+test("preserves streamed function call IDs and argument deltas", {timeout: 5000}, async context => {
+  const tools = [{type: "function", name: "read_file", parameters: {type: "object", properties: {}}}];
+  const {response, controller, calls} = await fixture(context, {tools});
+  const events = [
+    {type: "response.output_item.added", output_index: 0, item: {type: "function_call", id: "fc_1", call_id: "call_1", name: "read_file", arguments: ""}},
+    {type: "response.function_call_arguments.delta", item_id: "fc_1", output_index: 0, delta: "{}"},
+    {type: "response.function_call_arguments.done", item_id: "fc_1", output_index: 0, arguments: "{}"},
+    {type: "response.completed", response: {status: "completed", usage: {total_tokens: 12}}}
+  ].map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join("");
+  controller.enqueue(encoder.encode(events));
+  controller.close();
+  assert.equal(await response.text(), first + events);
+  assert.deepEqual(calls[1].tools, tools);
 });
 
 test("forwards upstream failure events without adding completion", {timeout: 5000}, async context => {

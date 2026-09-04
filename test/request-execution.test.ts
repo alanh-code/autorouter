@@ -22,11 +22,12 @@ function catalog() {
     context_length: 128_000, top_provider: {max_completion_tokens: 4096},
     pricing: {prompt: "0.000001", completion: "0.000002"},
     benchmarks: {artificial_analysis: {coding_index: 60 + index}},
-    supported_parameters: []
+    supported_parameters: id === "a" ? ["tools"] : []
   }))};
 }
 
-function mockAdapter(options: {failure?: boolean; incomplete?: boolean; invalidClassifier?: boolean} = {}) {
+function mockAdapter(options: {failure?: boolean; incomplete?: boolean; invalidClassifier?: boolean;
+  targetStatus?: number; targetResponse?: Record<string, unknown>} = {}) {
   const requests: Record<string, unknown>[] = [];
   const signals: AbortSignal[] = [];
   let catalogCalls = 0;
@@ -43,6 +44,8 @@ function mockAdapter(options: {failure?: boolean; incomplete?: boolean; invalidC
       id: "resp_classify", model: REQUEST_CLASSIFIER_MODEL,
       output_text: options.invalidClassifier ? "invalid" : JSON.stringify(classification)
     });
+    if (options.targetStatus) return Response.json({error: {message: "private upstream-key", code: "private-code"}}, {status: options.targetStatus});
+    if (options.targetResponse) return Response.json(options.targetResponse);
     return Response.json({
       id: "resp_execute", object: "response", model: body.model,
       status: options.incomplete ? "incomplete" : "completed",
@@ -92,6 +95,73 @@ test("runs local HTTP requests through classification, selection and exact execu
   assert.equal(mock.requests[1].max_output_tokens, 512);
   assert.equal(mock.catalogCalls, 1);
   assert.ok(fs.existsSync(cachePath));
+});
+
+const functionTool = {type: "function", name: "read_file", description: "Read a project file",
+  parameters: {type: "object", properties: {path: {type: "string"}}, required: ["path"], additionalProperties: false}, strict: true};
+const functionCall = {type: "function_call", id: "fc_1", call_id: "call_1", name: "read_file", arguments: '{"path":"index.ts"}', status: "completed"};
+
+test("preserves function definitions, call output and usage while selecting a tool-capable model", async context => {
+  const targetResponse = {id: "resp_tools", object: "response", model: "vendor/a", status: "completed",
+    output: [functionCall], usage: {input_tokens: 30, output_tokens: 10, total_tokens: 40, output_tokens_details: {reasoning_tokens: 2}}};
+  const {send, mock} = await fixture(context, {targetResponse});
+  const response = await send({tools: [functionTool], tool_choice: {type: "function", name: "read_file"}, parallel_tool_calls: false});
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), targetResponse);
+  const request = mock.requests[1];
+  assert.equal(request.model, "vendor/a");
+  assert.deepEqual(request.tools, [functionTool]);
+  assert.deepEqual(request.tool_choice, {type: "function", name: "read_file"});
+  assert.equal(request.parallel_tool_calls, false);
+});
+
+test("accepts a tool result follow-up with complete history and preserves call IDs", async context => {
+  const {send, mock} = await fixture(context);
+  const input = [{role: "user", content: "Read the file"}, functionCall,
+    {type: "function_call_output", call_id: "call_1", output: "export const answer = 42;"}];
+  const response = await send({input, tools: [functionTool]});
+  assert.equal(response.status, 200);
+  assert.deepEqual(mock.requests[1].input, input);
+  assert.equal(mock.requests[1].model, "vendor/a");
+});
+
+test("includes tool schemas in the input budget", async () => {
+  const mock = mockAdapter();
+  const models = await mock.adapter.listModels({apiKey: "upstream-key"});
+  const handler = createRoutedResponseHandler({catalog: models, benchmarks: createBenchmarkSnapshot(models), adapter: mock.adapter, apiKey: "upstream-key"});
+  const request = {model: "autorouter", input: "Read a file", tools: [functionTool]};
+  const result = await handler(request);
+  assert.equal(result.tokenEstimate.input, Buffer.byteLength(JSON.stringify({input: request.input, tools: request.tools}), "utf8"));
+});
+
+test("rejects invalid tools and function history before inference", async context => {
+  const {send, mock} = await fixture(context);
+  for (const body of [{tools: [{}]}, {tools: [{type: "web_search"}]},
+    {input: [{type: "function_call", name: "read_file", arguments: "{}"}]},
+    {input: [{type: "function_call_output", call_id: "call_1", output: {text: "invalid"}}]}]) {
+    assert.equal((await send(body)).status, 400);
+  }
+  assert.equal(mock.requests.length, 0);
+});
+
+test("preserves a failed response envelope without fabricating completion", async context => {
+  const targetResponse = {id: "resp_failed", object: "response", model: "vendor/b", status: "failed", output: [],
+    error: {code: "server_error", message: "Generation failed"}, usage: {input_tokens: 5, output_tokens: 0, total_tokens: 5}};
+  const {send} = await fixture(context, {targetResponse});
+  assert.deepEqual(await (await send({})).json(), targetResponse);
+});
+
+test("preserves upstream HTTP status and compatible error types without raw error details", async context => {
+  for (const [status, type] of [[400, "invalid_request_error"], [401, "authentication_error"],
+    [429, "rate_limit_error"], [503, "server_error"]] as const) {
+    const {send} = await fixture(context, {targetStatus: status});
+    const response = await send({});
+    assert.equal(response.status, status);
+    const body = await response.json();
+    assert.equal(body.error.type, type);
+    assert.equal(body.error.code, "upstream_error");
+    assert.doesNotMatch(JSON.stringify(body), /private|upstream-key/);
+  }
 });
 
 test("preserves incomplete upstream responses instead of reporting success", async context => {
