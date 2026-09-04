@@ -15,3 +15,4 @@ export {
 export {buildModelInventory, findModelById, toRoutingInventory} from "./inventory.js";
 export {normalizeModel, parseModelId} from "./model-id.js";
 export {validateStageModelIds} from "./routing.js";
+export {selectModelDeterministically} from "./request-routing-policy.ts";
