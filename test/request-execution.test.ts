@@ -89,6 +89,12 @@ test("runs local HTTP requests through classification, selection and exact execu
   assert.equal(response.status, 200);
   assert.equal(body.id, "resp_execute");
   assert.equal(body.model, "vendor/b");
+  assert.deepEqual(mock.requests[0].reasoning, {enabled: false});
+  assert.deepEqual(mock.requests[0].provider, {require_parameters: true, sort: "price"});
+  assert.equal(mock.requests[0].temperature, 0);
+  assert.equal(mock.requests[1].reasoning, undefined);
+  assert.equal(mock.requests[1].provider, undefined);
+  assert.equal(mock.requests[1].temperature, undefined);
   assert.equal(body.output[0].content[0].text, "Generated function");
   assert.deepEqual(body.usage, {input_tokens: 12, output_tokens: 8, total_tokens: 20});
   assert.deepEqual(mock.requests.map(request => request.model), [REQUEST_CLASSIFIER_MODEL, "vendor/b"]);

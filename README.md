@@ -114,7 +114,7 @@ Set `stream: true` in a streaming-capable client to receive SSE. Client disconne
 
 ## Routing and traces
 
-1. A fixed classifier (`deepseek/deepseek-v4-flash-0731`) categorizes the request through OpenRouter.
+1. A fixed classifier (`deepseek/deepseek-v4-flash-0731`) categorizes the request through OpenRouter, with reasoning disabled, temperature zero, and a 300-token output limit. Only parameter-compatible providers are eligible, sorted by price. These controls apply to classification, not the selected model's execution.
 2. AutoRouter filters models by published capabilities and context/output limits.
 3. It ranks candidates by task-specific benchmarks where available. Estimated cost breaks score ties. If no eligible model has the relevant benchmark, it uses available pricing. Model ID breaks remaining ties.
 4. The selected model ID is sent explicitly to OpenRouter, which may choose the hosting provider for that model.
@@ -122,7 +122,7 @@ Set `stream: true` in a streaming-capable client to receive SSE. Client disconne
 
 Selection is deterministic for the same classification, catalog, benchmark snapshot, and token estimates. Classification itself can vary. Benchmarks are selection inputs, not proof that a model is best for a request.
 
-Traces include a local request ID, policy version, ranked candidates, selection reason, requested model, reported actual model, upstream response ID, elapsed time, target-model usage/cost, and error state. Missing usage/cost is `null`, not zero. Cost excludes the classifier; elapsed time includes classification and execution.
+Traces include a local request ID, policy version, ranked candidates, selection reason, requested model, reported actual model, upstream response ID, elapsed time, target-model usage/cost, and error state. A separate `classifier` record includes the prompt version, category, reported provider, usage/cost, reasoning token count, and completion or truncation status. Missing usage/cost is `null`, not zero. Target-model cost excludes classification; elapsed time includes classification and execution. Classifier input, raw output and explanation are omitted by default; explicit diagnostic capture can retain them locally.
 
 Prompts, tool arguments/results, generated text, and raw error messages are not saved in traces. There is no automatic trace rotation. A storage failure prints a warning without failing the response.
 

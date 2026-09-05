@@ -46,9 +46,9 @@ test("classifies a request with the pinned model and structured output", async (
   const classifierRequest = translations[0].request as Record<string, unknown>;
   assert.match(String(classifierRequest.input), /Fix the parser/);
   const instructions = String(classifierRequest.instructions);
-  assert.match(instructions, /coding: Generate, modify, debug, review, or explain code/);
-  assert.match(instructions, /prefer the specialized requested outcome over coding, then coding over agentic or general_reasoning/);
-  assert.match(instructions, /Ensure the reason supports the selected category/);
+  assert.match(instructions, /Choose the FIRST matching category/);
+  assert.match(instructions, /Code explanation is coding even if no new code is requested/);
+  assert.match(instructions, /Planning ABOUT a specialized artifact is general_reasoning/);
   assert.deepEqual(
     (classifierRequest.text as {format: {type: string}}).format.type,
     "json_schema"
@@ -154,7 +154,7 @@ test("classifier traces omit content by default and include actual usage", async
   assert.equal(traces[0].classification?.confidence, 0.9);
   assert.equal(traces[0].actualModel, "vendor/actual");
   assert.equal(traces[0].usage.cost, 0.001);
-  assert.equal(traces[0].promptVersion, "v2");
+  assert.equal(traces[0].promptVersion, "v4");
   assert.doesNotMatch(JSON.stringify(traces), /private/);
 });
 
@@ -221,4 +221,35 @@ test("unrecognized upstream status strings do not leak into default traces", asy
   assert.equal(trace?.upstreamStatus, "unknown");
   assert.equal(trace?.incompleteReason, "unknown");
   assert.doesNotMatch(JSON.stringify(trace), /private text/);
+});
+
+test("classification controls are independent from the caller's generation settings", async () => {
+  let sent: Record<string, unknown> | undefined;
+  const adapter = {...createAdapter({output_text: traceOutput}),
+    translateRequest({request}: {request: unknown; modelId: string}) {
+      sent = request as Record<string, unknown>;
+      return sent;
+    }};
+  await classifyRequest({adapter, apiKey: "test-key", request: {
+    input: "neutral task", temperature: 1, reasoning: {enabled: true},
+    provider: {require_parameters: false}, max_output_tokens: 1
+  }});
+  assert.equal(sent?.max_output_tokens, 300);
+  assert.equal(sent?.temperature, 0);
+  assert.deepEqual(sent?.reasoning, {enabled: false});
+  assert.deepEqual(sent?.provider, {require_parameters: true, sort: "price"});
+  const format = (sent?.text as {format: {strict: boolean}}).format;
+  assert.equal(format.strict, true);
+  assert.match(String(sent?.instructions), /Task category and tool use are separate axes/);
+});
+
+test("classifier traces identify the selected provider without retaining endpoint details", async () => {
+  let trace: ClassifierTrace | undefined;
+  await classifyRequest({adapter: createAdapter({output_text: traceOutput,
+    openrouter_metadata: {endpoints: {available: [
+      {provider: "not selected", selected: false},
+      {provider: "selected provider", selected: true, privateField: "private endpoint detail"}
+    ]}}}), apiKey: "test-key", request: {}, onTrace: value => {trace = value;}});
+  assert.equal(trace?.actualProvider, "selected provider");
+  assert.doesNotMatch(JSON.stringify(trace), /private endpoint detail/);
 });

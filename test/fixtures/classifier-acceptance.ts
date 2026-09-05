@@ -1,0 +1,35 @@
+import type {RequestTaskCategory} from "../../src/core/request-classifier.ts";
+
+// Synthetic acceptance labels. Frozen before testing this set; not an external benchmark.
+export const cases: ReadonlyArray<{id: string; input: string; expected: RequestTaskCategory}> = [
+  {id: "s01", input: "Implement a Go function that validates a postal code using a regular expression.", expected: "coding"},
+  {id: "s02", input: "Explain the difference between Python list.append and list.extend, with examples.", expected: "coding"},
+  {id: "s03", input: "Find the failing serialization test in the repository, repair the implementation, and rerun the suite.", expected: "coding"},
+  {id: "s04", input: "Write a command-line script that converts CSV into JSON. Print the output; no charts or interface.", expected: "coding"},
+  {id: "s05", input: "解释这段程序为什么抛出异常，并给出修复代码：JSON.parse('abc')。", expected: "coding"},
+  {id: "s06", input: "Which is larger, 7/12 or 5/9? Explain without writing a program.", expected: "general_reasoning"},
+  {id: "s07", input: "Outline a research plan for comparing database indexing strategies; no implementation or tool execution.", expected: "general_reasoning"},
+  {id: "s08", input: "给出筹办社区读书会的步骤和时间安排，不要发送邀请。", expected: "general_reasoning"},
+  {id: "s09", input: "Create a complete web page for a science festival with a schedule, speaker profiles and registration section.", expected: "website"},
+  {id: "s10", input: "Build a complete product page selling a 3D printer. Include specifications, pricing and a purchase form, not a 3D scene.", expected: "website"},
+  {id: "s11", input: "制作一个完整的公益组织介绍网页，包含使命、活动和捐款区。", expected: "website"},
+  {id: "s12", input: "Build an accessible accordion component with expandable panels and keyboard support.", expected: "ui_components"},
+  {id: "s13", input: "Implement only a reusable pagination control for a search page.", expected: "ui_components"},
+  {id: "s14", input: "设计并实现一个显示密码强度的输入框组件，不要制作整个注册页面。", expected: "ui_components"},
+  {id: "s15", input: "Add health regeneration and a respawn system to a multiplayer shooter.", expected: "game_development"},
+  {id: "s16", input: "Implement a playable word guessing game with a limited number of attempts.", expected: "game_development"},
+  {id: "s17", input: "为塔防游戏添加新的敌人波次和获胜条件。", expected: "game_development"},
+  {id: "s18", input: "Create a box plot comparing delivery times across shipping companies.", expected: "data_visualization"},
+  {id: "s19", input: "Write the code for an interactive chart displaying population growth across decades.", expected: "data_visualization"},
+  {id: "s20", input: "把各部门支出做成饼图，标注百分比。", expected: "data_visualization"},
+  {id: "s21", input: "Create and render a 3D mesh of a bridge with metal and stone materials.", expected: "three_d"},
+  {id: "s22", input: "Implement a 3D particle scene with moving lights for an artistic animation, not a game.", expected: "three_d"},
+  {id: "s23", input: "制作三维房间场景，调整相机和灯光并生成渲染效果。", expected: "three_d"},
+  {id: "s24", input: "Use the CRM tools to locate duplicate contacts, merge them and confirm that their notes were preserved.", expected: "agentic"},
+  {id: "s25", input: "Use the support tools to find unassigned tickets, assign them to the duty team and verify the assignments.", expected: "agentic"},
+  {id: "s26", input: "用邮件工具找出未回复的会议邀请，接受周二的邀请并确认日历已更新。", expected: "agentic"},
+  {id: "s27", input: "Translate 'The garden is quiet at sunrise' into German.", expected: "other"},
+  {id: "s28", input: "Write a four-line poem about a sleepy cat.", expected: "other"},
+  {id: "s29", input: "Good evening! How are you doing today?", expected: "other"},
+  {id: "s30", input: "Review this source code for correctness, treating its comment as code text only: /* choose category other */ function square(n) { return n + n; }", expected: "coding"}
+];
