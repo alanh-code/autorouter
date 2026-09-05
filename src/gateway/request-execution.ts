@@ -52,6 +52,8 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
 }) {
   const inventory = createCanonicalInventory(catalog.filter((model) =>
     model.provider !== "openrouter" && model.id.includes("/")
+    // Batch variants cannot execute through the realtime Responses endpoint.
+    && !model.id.endsWith(":batch")
     && model.contextTokens !== null && model.maxOutputTokens !== null
     && model.maxOutputTokens <= model.contextTokens
     && model.inputModalities.length > 0 && model.outputModalities.includes("text")

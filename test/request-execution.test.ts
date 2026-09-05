@@ -231,3 +231,49 @@ test("returns routing evidence and forwards cancellation for text message histor
   assert.equal(mock.signals.length, 2);
   assert.ok(mock.signals.every(signal => signal.aborted));
 });
+
+for (const scenario of ["buffered", "streaming", "pricing only", "batch in model name"]) {
+  test(`excludes batch variants from realtime routing: ${scenario}`, async () => {
+    const mock = mockAdapter();
+    const source = (await mock.adapter.listModels({apiKey: "test-key"}))[1];
+    const normal = {...source, id: scenario === "batch in model name" ? "vendor/batch-helper:free" : source.id};
+    const batch = {...source, id: `${source.id}:batch`, promptPricePerToken: 0, completionPricePerToken: 0,
+      benchmarks: {...source.benchmarks, artificialAnalysis: {intelligenceIndex: 100, codingIndex: 100, agenticIndex: 100}}};
+    const models = [normal, batch];
+    const streamed: Record<string, unknown>[] = [];
+    const adapter = {...mock.adapter, async streamResponse({request}: {request: unknown}) {
+      streamed.push(request as Record<string, unknown>);
+      return (async function* () {yield new TextEncoder().encode("data: [DONE]\n\n");})();
+    }};
+    const handler = createRoutedResponseHandler({catalog: models,
+      benchmarks: createBenchmarkSnapshot(scenario === "pricing only" ? [] : models), adapter, apiKey: "test-key"});
+    const result = await handler({model: "autorouter", input: "Write a sorting function", stream: scenario === "streaming"});
+    assert.equal(result.decision.upstreamModelId, normal.id);
+    assert.ok(result.decision.candidates.every(candidate => candidate.upstreamModelId !== batch.id));
+    if ("stream" in result) {
+      for await (const chunk of result.stream) assert.ok(chunk.byteLength > 0);
+      assert.equal(streamed[0].model, normal.id);
+      assert.equal(mock.requests.length, 1);
+    } else {
+      assert.equal(mock.requests[1].model, normal.id);
+    }
+  });
+}
+
+test("a batch-only catalog cannot trigger realtime target execution", async () => {
+  const mock = mockAdapter();
+  const source = (await mock.adapter.listModels({apiKey: "test-key"}))[1];
+  const models = [{...source, id: `${source.id}:batch`}];
+  let streamed = false;
+  const adapter = {...mock.adapter, async streamResponse() {
+    streamed = true;
+    return (async function* () {})();
+  }};
+  const handler = createRoutedResponseHandler({catalog: models, benchmarks: createBenchmarkSnapshot(models), adapter, apiKey: "test-key"});
+  for (const stream of [false, true]) {
+    await assert.rejects(handler({model: "autorouter", input: "Write a sorting function", stream}), /No eligible model/);
+  }
+  assert.equal(streamed, false);
+  assert.equal(mock.requests.length, 2);
+  assert.ok(mock.requests.every(request => request.model === REQUEST_CLASSIFIER_MODEL));
+});
