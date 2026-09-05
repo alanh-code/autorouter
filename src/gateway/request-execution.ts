@@ -75,6 +75,12 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
     const trace = startRoutingTrace(tracePath);
     try {
       validateRequest(request);
+      const forcedToolChoice = request.tool_choice === "required" || record(request.tool_choice)?.type === "function";
+      const eligibleInventory = forcedToolChoice ? inventory.filter(model => catalog.some(entry =>
+        entry.id === model.upstreams.openrouter?.modelId && entry.supportedParameters.includes("tool_choice"))) : inventory;
+      if (forcedToolChoice && !eligibleInventory.some(model => model.capabilities.toolCalls)) {
+        reject("No model supports forced tool choice");
+      }
       const maxOutputTokens = request.max_output_tokens as number | undefined ?? 1024;
       // UTF-8 bytes are a conservative text budget, not a measured tokenizer count.
       const estimatedInputTokens = Buffer.byteLength(JSON.stringify({input: request.input, instructions: request.instructions, tools: request.tools}), "utf8");
@@ -87,14 +93,16 @@ export function createRoutedResponseHandler({catalog, benchmarks, adapter, apiKe
         || classification.requiredCapabilities.outputModalities.some((value) => value !== "text")) {
         reject("This request requires capabilities beyond text execution");
       }
-      const decision = selectModelDeterministically({inventory, benchmarks, requirements: {
+      const decision = selectModelDeterministically({inventory: eligibleInventory, benchmarks, requirements: {
         classification,
         upstream: "openrouter", estimatedInputTokens, estimatedOutputTokens: maxOutputTokens,
         streaming: request.stream === true
       }});
       trace.select(decision);
       const translated = adapter.translateRequest({
-        request: {...request, max_output_tokens: maxOutputTokens}, modelId: decision.upstreamModelId
+        request: {...request, max_output_tokens: maxOutputTokens,
+          ...(forcedToolChoice ? {provider: {...record(request.provider), require_parameters: true}} : {})},
+        modelId: decision.upstreamModelId
       });
       if (request.stream === true) {
         const stream = await adapter.streamResponse({headers: adapter.createAuthHeaders({apiKey}), request: translated, signal});
@@ -140,6 +148,17 @@ function validateRequest(request: Request): void {
       const value = record(tool);
       if (value?.type !== "function" || !nonempty(value.name)
         || (value.parameters != null && !record(value.parameters))) reject("Only valid function tools are supported");
+    }
+  }
+  if (request.tool_choice !== undefined) {
+    const choice = record(request.tool_choice);
+    if (!(typeof request.tool_choice === "string" && ["auto", "none", "required"].includes(request.tool_choice))
+      && !(choice?.type === "function" && nonempty(choice.name) && Object.keys(choice).every(key => ["type", "name"].includes(key)))) {
+      reject("Unsupported tool_choice");
+    }
+    if (request.tool_choice === "required" || choice) {
+      if (!Array.isArray(request.tools) || !request.tools.length) reject("Forced tool choice requires tools");
+      if (choice && !request.tools.some(tool => record(tool)?.name === choice.name)) reject("Selected function must be declared in tools");
     }
   }
   if (request.previous_response_id != null) reject("Send complete message history; previous_response_id is not supported yet");

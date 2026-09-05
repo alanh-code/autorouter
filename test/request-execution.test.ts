@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import {createRoutedGateway, createRoutedResponseHandler} from "../src/gateway/request-execution.ts";
 import {createOpenRouterAdapter} from "../src/gateway/openrouter-adapter.ts";
+import type {OpenRouterModel} from "../src/gateway/openrouter-adapter.ts";
 import {createBenchmarkSnapshot} from "../src/core/benchmark-data.ts";
 import {REQUEST_CLASSIFIER_MODEL} from "../src/core/request-classifier.ts";
 
@@ -22,7 +23,7 @@ function catalog() {
     context_length: 128_000, top_provider: {max_completion_tokens: 4096},
     pricing: {prompt: "0.000001", completion: "0.000002"},
     benchmarks: {artificial_analysis: {coding_index: 60 + index}},
-    supported_parameters: id === "a" ? ["tools"] : []
+    supported_parameters: id === "a" ? ["tools", "tool_choice"] : []
   }))};
 }
 
@@ -113,6 +114,53 @@ test("runs local HTTP requests through classification, selection and exact execu
 const functionTool = {type: "function", name: "read_file", description: "Read a project file",
   parameters: {type: "object", properties: {path: {type: "string"}}, required: ["path"], additionalProperties: false}, strict: true};
 const functionCall = {type: "function_call", id: "fc_1", call_id: "call_1", name: "read_file", arguments: '{"path":"index.ts"}', status: "completed"};
+
+for (const toolChoice of ["required", {type: "function", name: "read_file"}]) {
+  test(`filters forced tool choice ${JSON.stringify(toolChoice)} before benchmark ranking`, async () => {
+    const mock = mockAdapter();
+    const models = (await mock.adapter.listModels({apiKey: "upstream-key"})).map((model: OpenRouterModel) =>
+      model.id === "vendor/b" ? {...model, supportedParameters: ["tools"]} : model);
+    const handler = createRoutedResponseHandler({catalog: models, benchmarks: createBenchmarkSnapshot(models), adapter: mock.adapter, apiKey: "upstream-key"});
+    const result = await handler({model: "autorouter", input: "Read a file", tools: [functionTool], tool_choice: toolChoice,
+      provider: {sort: "price", require_parameters: false}});
+    assert.equal(result.decision.upstreamModelId, "vendor/a");
+    assert.deepEqual(result.decision.candidates.map(candidate => candidate.upstreamModelId), ["vendor/a"]);
+    assert.deepEqual(mock.requests[1].tool_choice, toolChoice);
+    assert.deepEqual(mock.requests[1].provider, {sort: "price", require_parameters: true});
+    assert.equal(mock.requests.length, 2);
+  });
+}
+
+test("rejects forced tool choice without a compatible model before paid inference", async () => {
+  const mock = mockAdapter();
+  const models = (await mock.adapter.listModels({apiKey: "upstream-key"})).map((model: OpenRouterModel) => ({...model, supportedParameters: ["tools"]}));
+  const handler = createRoutedResponseHandler({catalog: models, benchmarks: createBenchmarkSnapshot(models), adapter: mock.adapter, apiKey: "upstream-key"});
+  await assert.rejects(handler({model: "autorouter", input: "Read a file", tools: [functionTool], tool_choice: "required"}), /No model supports forced tool choice/);
+  assert.equal(mock.requests.length, 0);
+});
+
+test("keeps auto and none eligible without forced-choice support", async () => {
+  const mock = mockAdapter();
+  const models = (await mock.adapter.listModels({apiKey: "upstream-key"})).map((model: OpenRouterModel) => ({...model, supportedParameters: ["tools"]}));
+  const handler = createRoutedResponseHandler({catalog: models, benchmarks: createBenchmarkSnapshot(models), adapter: mock.adapter, apiKey: "upstream-key"});
+  for (const tool_choice of ["auto", "none"]) {
+    const result = await handler({model: "autorouter", input: "Read a file", tools: [functionTool], tool_choice});
+    assert.equal(result.decision.upstreamModelId, "vendor/b");
+    assert.equal(mock.requests.at(-1)?.tool_choice, tool_choice);
+    assert.equal(mock.requests.at(-1)?.provider, undefined);
+  }
+});
+
+test("rejects malformed or undeclared tool choices before inference", async context => {
+  const {send, mock} = await fixture(context);
+  for (const body of [{tool_choice: "required"}, {tool_choice: "invalid", tools: [functionTool]},
+    {tool_choice: ["required"], tools: [functionTool]}, {tool_choice: null, tools: [functionTool]},
+    {tool_choice: {type: "function", name: "missing"}, tools: [functionTool]},
+    {tool_choice: {type: "function", name: "read_file", extra: true}, tools: [functionTool]}]) {
+    assert.equal((await send(body)).status, 400);
+  }
+  assert.equal(mock.requests.length, 0);
+});
 
 test("preserves function definitions, call output and usage while selecting a tool-capable model", async context => {
   const targetResponse = {id: "resp_tools", object: "response", model: "vendor/a", status: "completed",
